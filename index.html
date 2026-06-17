@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>学习笔记 - Learn Notes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="个人学习笔记：前端、后端、人工智能等分类知识整理与复习。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+
+  <!-- docsify 核心 -->
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/themes/vue.css">
+</head>
+<body>
+  <div id="app">加载中...</div>
+
+  <script>
+    window.$docsify = {
+      name: '学习笔记',
+      nameLink: '#/',
+      repo: '',
+      loadSidebar: true,
+      loadNavbar: true,
+      coverpage: true,
+      onlyCover: false,
+      maxLevel: 4,
+      subMaxLevel: 3,
+      search: 'auto',
+      pagination: {
+        previousText: '上一篇',
+        nextText: '下一篇',
+        crossChapter: true,
+        crossChapterText: true
+      },
+      copyCode: {
+        buttonText: '复制',
+        errorText: '复制失败',
+        successText: '已复制'
+      }
+    };
+  </script>
+
+  <!-- docsify 脚本与插件 -->
+  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/plugins/emoji.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify-copy-code@3"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify-pagination@2/dist/docsify-pagination.min.js"></script>
+</body>
+</html>

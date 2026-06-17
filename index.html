@@ -9,8 +9,47 @@
 
   <!-- docsify 核心 -->
   <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/themes/vue.css">
+  <style>
+    /* 自建欢迎页样式（替代 docsify coverpage） */
+    #welcome {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #fad0c4 0%, #ffd1ff 100%);
+      transition: opacity .3s ease, visibility .3s ease;
+    }
+    #welcome.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+    .welcome-inner { text-align: center; padding: 24px; }
+    .welcome-inner h1 { font-size: 3rem; margin: 0 0 12px; color: #2c3e50; }
+    .welcome-inner .lead { font-size: 1.2rem; color: #34495e; margin: 0 0 32px; }
+    .welcome-btn {
+      display: inline-block;
+      padding: 12px 32px;
+      background: #42b983;
+      color: #fff !important;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 1.1rem;
+      transition: background .2s;
+    }
+    .welcome-btn:hover { background: #339966; }
+    .welcome-inner .hint { margin-top: 24px; font-size: .85rem; color: #7f8c8d; }
+  </style>
 </head>
 <body>
+  <!-- 自建欢迎页（替代 docsify coverpage，避免 ?id= 路由在某些环境下不收敛） -->
+  <div id="welcome">
+    <div class="welcome-inner">
+      <h1>学习笔记 📚</h1>
+      <p class="lead">沉淀知识 · 精简复习 · 持续更新</p>
+      <a class="welcome-btn" href="#/README">开始阅读 🚀</a>
+      <p class="hint">GitHub Pages 部署中可直接进入首页，本地服务亦同</p>
+    </div>
+  </div>
+
   <div id="app">加载中...</div>
 
   <script>
@@ -24,8 +63,6 @@
         basePath: isGhPages ? '/learn_code/' : '/',
         loadSidebar: true,
         loadNavbar: true,
-        coverpage: '_coverpage.md',
-        onlyCover: false,
         maxLevel: 4,
         subMaxLevel: 3,
         search: 'auto',
@@ -50,5 +87,31 @@
   <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/plugins/emoji.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify-copy-code@3"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify-pagination@2/dist/docsify-pagination.min.js"></script>
+
+  <script>
+    // 欢迎页 → docsify 路由衔接
+    (function () {
+      var welcome = document.getElementById('welcome');
+      function hideWelcome() { if (welcome) welcome.classList.add('hide'); }
+      // 1. 直接进入时若 URL 已是文档路径（#/README 等），立即关闭欢迎页
+      if (location.hash && location.hash !== '#/' && location.hash !== '#') {
+        hideWelcome();
+      }
+      // 2. 监听欢迎页按钮点击：阻止默认行为，强制 docsify 重新走 hash 路由
+      if (welcome) {
+        welcome.addEventListener('click', function (e) {
+          var a = e.target.closest('a.welcome-btn');
+          if (!a) return;
+          e.preventDefault();
+          // 用纯 hash 赋值（不走 ?id= 形式），确保 Live Server / 本地服务都能正确触发
+          var href = a.getAttribute('href') || '#/README';
+          location.hash = href;
+          hideWelcome();
+        });
+      }
+      // 3. 兜底：任何 hash 变化都关掉欢迎页
+      window.addEventListener('hashchange', hideWelcome);
+    })();
+  </script>
 </body>
 </html>

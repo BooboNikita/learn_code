@@ -14,30 +14,34 @@
   <div id="app">加载中...</div>
 
   <script>
-    window.$docsify = {
-      name: '学习笔记',
-      nameLink: '#/',
-      repo: '',
-      basePath: '/learn_code/',
-      loadSidebar: true,
-      loadNavbar: true,
-      coverpage: '/_coverpage.md',
-      onlyCover: false,
-      maxLevel: 4,
-      subMaxLevel: 3,
-      search: 'auto',
-      pagination: {
-        previousText: '上一篇',
-        nextText: '下一篇',
-        crossChapter: true,
-        crossChapterText: true
-      },
-      copyCode: {
-        buttonText: '复制',
-        errorText: '复制失败',
-        successText: '已复制'
-      }
-    };
+    // 动态判断 basePath：GitHub Pages 子路径部署用 /learn_code/，本地或自定义域名用 /
+    (function () {
+      var isGhPages = /\.github\.io$/.test(location.hostname) && location.pathname.indexOf('/learn_code') === 0;
+      window.$docsify = {
+        name: '学习笔记',
+        nameLink: '#/',
+        repo: '',
+        basePath: isGhPages ? '/learn_code/' : '/',
+        loadSidebar: true,
+        loadNavbar: true,
+        coverpage: '/_coverpage.md',
+        onlyCover: false,
+        maxLevel: 4,
+        subMaxLevel: 3,
+        search: 'auto',
+        pagination: {
+          previousText: '上一篇',
+          nextText: '下一篇',
+          crossChapter: true,
+          crossChapterText: true
+        },
+        copyCode: {
+          buttonText: '复制',
+          errorText: '复制失败',
+          successText: '已复制'
+        }
+      };
+    })();
   </script>
 
   <!-- docsify 脚本与插件 -->

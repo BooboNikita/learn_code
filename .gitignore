@@ -1,2 +1,4 @@
-# Trae IDE 内部文件
-.trae/
+# Trae IDE 内部文件（保留 skills 目录，自定义 skill 需要版本管理）
+.trae/documents/
+.trae/rules/
+.trae/cache/

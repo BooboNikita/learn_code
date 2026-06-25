@@ -14,3 +14,4 @@
 
 ## 文章列表
 - [Agent 记忆机制](Agent记忆机制.md) — Claude Code 静态层 + 动态层架构，治业界 4 类方案病根。
+- [父子 Agent 通信](父子Agent通信.md) — Claude Code 父子型多 Agent：工具/上下文隔离、默认单向 vs 团队模式双向通信、Fork 与 Coordinator 模式。

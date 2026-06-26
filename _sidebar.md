@@ -62,4 +62,5 @@
   - [大语言模型 LLM](人工智能/大语言模型/README.md)
     - [Agent 记忆机制](人工智能/大语言模型/Agent记忆机制.md)
     - [父子 Agent 通信](人工智能/大语言模型/父子Agent通信.md)
+    - [Harness 工程化](人工智能/大语言模型/Harness工程化.md)
   - [计算机视觉](人工智能/计算机视觉/README.md)

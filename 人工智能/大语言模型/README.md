@@ -16,3 +16,4 @@
 - [Agent 记忆机制](Agent记忆机制.md) — Claude Code 静态层 + 动态层架构，治业界 4 类方案病根。
 - [父子 Agent 通信](父子Agent通信.md) — Claude Code 父子型多 Agent：工具/上下文隔离、默认单向 vs 团队模式双向通信、Fork 与 Coordinator 模式。
 - [Harness 工程化](Harness工程化.md) — 围绕 LLM 的驾驭脚手架：六层组件（上下文/工具/编排/记忆/观测/护栏）+ 五大工程难题 + 五条口诀。
+- [Loop 工程化](Loop工程化.md) — 从 Prompt 到 Loop 的范式转变：五大件（自动化/Worktree/Skill/Connector/Sub-Agent）+ 真实 Loop 实例 + 三盆冷水（验证/理解债/认知投降）。

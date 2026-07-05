@@ -2,11 +2,15 @@
 
 > 来源：[小林coding - Java虚拟机面试题](https://xiaolincoding.com/interview/jvm.html)
 
+![JVM 面试题封面](images/jvm-cover.png)
+
 ## 一、内存模型
 
 ### 1.1 JVM 运行时内存结构
 
 JDK 8 规范下，JVM 运行时内存共分为五大部分 + 直接内存：
+
+![JVM 内存结构](images/jvm-memory-structure.png)
 
 | 区域 | 线程归属 | 存储内容 | 异常 |
 |------|---------|---------|------|
@@ -32,6 +36,8 @@ JDK 8 规范下，JVM 运行时内存共分为五大部分 + 直接内存：
 栈中存储的是**对象引用（指针）**，而非对象本身。基本类型直接存值，对象类型存的是指向堆中实例的引用（64 位系统上 8 字节）。
 
 ### 1.4 堆的分代结构
+
+![堆分代结构](images/heap-generation.png)
 
 ```
 堆

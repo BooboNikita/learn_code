@@ -53,7 +53,7 @@
       z-index: 20;
       display: none;
     }
-    .right-toc.show { display: block; }
+    .right-toc.show { display: none; }
     .right-toc-title {
       font-size: 14px;
       font-weight: 600;
@@ -76,17 +76,69 @@
     .right-toc a.active { color: #42b983; border-left-color: #42b983; }
     .right-toc .toc-h3 { padding-left: 24px; }
     .right-toc .toc-h4 { padding-left: 36px; }
-    /* 内容区域右移，给右侧目录留空间 */
+
+    /* 移动端目录浮动按钮 */
+    .toc-fab {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #42b983;
+      color: #fff;
+      font-size: 20px;
+      line-height: 44px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+      cursor: pointer;
+      z-index: 30;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .toc-fab:active { background: #339966; }
+
+    /* 移动端目录弹窗遮罩 */
+    .toc-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.4);
+      z-index: 25;
+    }
+    .toc-overlay.show { display: block; }
+
+    /* 桌面端：右侧固定目录 */
     @media (min-width: 1200px) {
       .right-toc.show { display: block; }
-      .content,
-      .markdown-section { padding-right: 230px !important; }
+      body.show-toc .content { padding-right: 230px !important; }
+      body.show-toc .markdown-section { max-width: none !important; padding-right: 0 !important; }
+      .toc-fab { display: none !important; }
+      .toc-overlay { display: none !important; }
     }
-    /* 小屏幕隐藏右侧目录 */
+    /* 移动端：浮动按钮 + 弹窗 */
     @media (max-width: 1199px) {
-      .right-toc { display: none !important; }
+      .right-toc {
+        display: none;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 85vw;
+        max-width: 360px;
+        height: 70vh;
+        border-left: none;
+        border-radius: 8px;
+        box-shadow: 0 4px 24px rgba(0,0,0,.15);
+        z-index: 30;
+        padding: 16px;
+      }
+      .right-toc.mobile-show {
+        display: block;
+      }
       .content,
       .markdown-section { padding-right: 0 !important; }
+      .toc-fab { display: block; }
     }
   </style>
 </head>
@@ -108,6 +160,12 @@
     <div class="right-toc-title">本文目录</div>
     <ul id="right-toc-list"></ul>
   </div>
+
+  <!-- 移动端目录弹窗遮罩 -->
+  <div class="toc-overlay" id="toc-overlay"></div>
+
+  <!-- 移动端目录浮动按钮 -->
+  <div class="toc-fab" id="toc-fab">&#9776;</div>
 
   <script>
     // 动态判断 basePath：GitHub Pages 子路径部署用 /learn_code/，本地或自定义域名用 /
@@ -159,6 +217,7 @@
         tocList.innerHTML = '';
         if (headings.length === 0) {
           tocContainer.classList.remove('show');
+          document.body.classList.remove('show-toc');
           return;
         }
         headings.forEach(function (h) {
@@ -178,6 +237,7 @@
           tocList.appendChild(li);
         });
         tocContainer.classList.add('show');
+        document.body.classList.add('show-toc');
         highlightToc();
       }
 
@@ -204,6 +264,31 @@
 
       // 监听滚动，更新高亮
       window.addEventListener('scroll', highlightToc, false);
+
+      // 移动端：浮动按钮打开/关闭目录弹窗
+      var fab = document.getElementById('toc-fab');
+      var overlay = document.getElementById('toc-overlay');
+      function closeMobileToc() {
+        tocContainer.classList.remove('mobile-show');
+        overlay.classList.remove('show');
+      }
+      fab.addEventListener('click', function () {
+        var isOpen = tocContainer.classList.contains('mobile-show');
+        if (isOpen) {
+          closeMobileToc();
+        } else {
+          tocContainer.classList.add('mobile-show');
+          overlay.classList.add('show');
+        }
+      });
+      overlay.addEventListener('click', closeMobileToc);
+
+      // 移动端点击目录项后自动关闭弹窗
+      tocList.addEventListener('click', function (e) {
+        if (e.target.tagName === 'A' && window.innerWidth < 1200) {
+          closeMobileToc();
+        }
+      });
 
       // docsify mountedEachContent 钩子：内容挂载后重建目录
       if (!window.$docsify.plugins) window.$docsify.plugins = [];

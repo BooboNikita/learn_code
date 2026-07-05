@@ -3,8 +3,6 @@
 > 来源：[小林coding - Java并发编程面试题](https://xiaolincoding.com/interview/juc.html)
 > 一句话总结：Java 并发的核心主线是 JMM → synchronized/锁升级 → volatile/CAS → AQS → 线程池，搞清这条线就能覆盖面试 80% 的高频问题。
 
-![封面](images/juc-cover.png)
-
 ## 一、内存模型与线程基础
 
 ### 1.1 JMM（Java 内存模型）

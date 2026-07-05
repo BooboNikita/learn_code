@@ -37,6 +37,57 @@
     }
     .welcome-btn:hover { background: #339966; }
     .welcome-inner .hint { margin-top: 24px; font-size: .85rem; color: #7f8c8d; }
+
+    /* 右侧文章目录样式 */
+    .right-toc {
+      position: fixed;
+      top: 60px;
+      right: 0;
+      width: 220px;
+      height: calc(100vh - 60px);
+      padding: 16px 12px 16px 0;
+      overflow-y: auto;
+      font-size: 13px;
+      border-left: 1px solid #eee;
+      background: #fff;
+      z-index: 20;
+      display: none;
+    }
+    .right-toc.show { display: block; }
+    .right-toc-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: 8px;
+      padding-left: 12px;
+    }
+    .right-toc ul { list-style: none; padding-left: 0; margin: 0; }
+    .right-toc li { margin: 0; }
+    .right-toc a {
+      display: block;
+      padding: 4px 12px;
+      color: #666;
+      text-decoration: none;
+      line-height: 1.5;
+      border-left: 2px solid transparent;
+      transition: all .15s;
+    }
+    .right-toc a:hover { color: #42b983; }
+    .right-toc a.active { color: #42b983; border-left-color: #42b983; }
+    .right-toc .toc-h3 { padding-left: 24px; }
+    .right-toc .toc-h4 { padding-left: 36px; }
+    /* 内容区域右移，给右侧目录留空间 */
+    @media (min-width: 1200px) {
+      .right-toc.show { display: block; }
+      .content,
+      .markdown-section { padding-right: 230px !important; }
+    }
+    /* 小屏幕隐藏右侧目录 */
+    @media (max-width: 1199px) {
+      .right-toc { display: none !important; }
+      .content,
+      .markdown-section { padding-right: 0 !important; }
+    }
   </style>
 </head>
 <body>
@@ -52,6 +103,12 @@
 
   <div id="app">加载中...</div>
 
+  <!-- 右侧文章目录容器 -->
+  <div class="right-toc" id="right-toc">
+    <div class="right-toc-title">本文目录</div>
+    <ul id="right-toc-list"></ul>
+  </div>
+
   <script>
     // 动态判断 basePath：GitHub Pages 子路径部署用 /learn_code/，本地或自定义域名用 /
     (function () {
@@ -64,7 +121,7 @@
         loadSidebar: true,
         loadNavbar: true,
         maxLevel: 4,
-        subMaxLevel: 3,
+        subMaxLevel: 0,
         search: 'auto',
         pagination: {
           previousText: '上一篇',
@@ -87,6 +144,70 @@
   <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/plugins/emoji.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify-copy-code@3"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify-pagination@2/dist/docsify-pagination.min.js"></script>
+
+  <!-- 右侧文章目录插件 -->
+  <script>
+    (function () {
+      var tocContainer = document.getElementById('right-toc');
+      var tocList = document.getElementById('right-toc-list');
+
+      // 使用 docsify 钩子：每次页面路由变化后重新生成目录
+      function buildToc() {
+        var content = document.querySelector('.markdown-section');
+        if (!content) return;
+        var headings = content.querySelectorAll('h2, h3, h4');
+        tocList.innerHTML = '';
+        if (headings.length === 0) {
+          tocContainer.classList.remove('show');
+          return;
+        }
+        headings.forEach(function (h) {
+          var li = document.createElement('li');
+          var a = document.createElement('a');
+          // docsify 给标题自动加 id
+          a.href = '#' + (h.id || '');
+          a.textContent = h.textContent;
+          a.className = 'toc-' + h.tagName.toLowerCase();
+          li.appendChild(a);
+          tocList.appendChild(li);
+        });
+        tocContainer.classList.add('show');
+        highlightToc();
+      }
+
+      // 高亮当前滚动位置对应的目录项
+      function highlightToc() {
+        var content = document.querySelector('.markdown-section');
+        if (!content) return;
+        var headings = content.querySelectorAll('h2, h3, h4');
+        var scrollTop = content.scrollTop || document.documentElement.scrollTop || document.body.scrollTop;
+        var activeId = '';
+        headings.forEach(function (h) {
+          if (h.offsetTop <= scrollTop + 80) {
+            activeId = h.id || '';
+          }
+        });
+        var links = tocList.querySelectorAll('a');
+        links.forEach(function (a) {
+          a.classList.remove('active');
+          if (a.getAttribute('href') === '#' + activeId) {
+            a.classList.add('active');
+          }
+        });
+      }
+
+      // 监听滚动，更新高亮
+      window.addEventListener('scroll', highlightToc, false);
+
+      // docsify mountedEachContent 钩子：内容挂载后重建目录
+      if (!window.$docsify.plugins) window.$docsify.plugins = [];
+      window.$docsify.plugins.push(function (hook) {
+        hook.doneEach(function () {
+          setTimeout(buildToc, 100);
+        });
+      });
+    })();
+  </script>
 
   <script>
     // 欢迎页 → docsify 路由衔接

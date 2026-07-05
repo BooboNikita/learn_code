@@ -164,10 +164,16 @@
         headings.forEach(function (h) {
           var li = document.createElement('li');
           var a = document.createElement('a');
-          // docsify 给标题自动加 id
-          a.href = '#' + (h.id || '');
+          // 用 data-id 存储锚点，点击时滚动定位而非 hash 导航，避免 docsify 误判为新页面
+          a.setAttribute('data-id', h.id || '');
+          a.href = 'javascript:void(0)';
           a.textContent = h.textContent;
           a.className = 'toc-' + h.tagName.toLowerCase();
+          a.addEventListener('click', function (e) {
+            e.preventDefault();
+            var target = document.getElementById(this.getAttribute('data-id'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
           li.appendChild(a);
           tocList.appendChild(li);
         });
@@ -190,7 +196,7 @@
         var links = tocList.querySelectorAll('a');
         links.forEach(function (a) {
           a.classList.remove('active');
-          if (a.getAttribute('href') === '#' + activeId) {
+          if (a.getAttribute('data-id') === activeId) {
             a.classList.add('active');
           }
         });

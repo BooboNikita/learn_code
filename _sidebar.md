@@ -1,4 +1,4 @@
-- **🖥️ 前端**
+- 🖥️ 前端
   - [HTML 基础](前端/HTML/README.md)
   - [CSS 布局与样式](前端/CSS/README.md)
   - [JavaScript 核心](前端/JavaScript/README.md)
@@ -6,7 +6,7 @@
   - [React 入门](前端/React/README.md)
   - [工程化工具](前端/工程化/README.md)
 
-- **⚙️ 后端**
+- ⚙️ 后端
   - [计算机基础](后端/计算机基础/README.md)
     - [程序运行过程](后端/计算机基础/程序运行过程.md)
     - [操作系统启动](后端/计算机基础/操作系统启动.md)

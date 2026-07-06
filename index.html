@@ -110,10 +110,18 @@
     .toc-overlay.show { display: block; }
 
     /* 桌面端：右侧固定目录 */
+    /* markdown-section 主内容区与 sidebar/右侧目录的留白 */
+    .markdown-section {
+      max-width: 900px !important;
+      padding: 30px 32px 40px 32px !important;
+      box-sizing: border-box;
+    }
+    body.show-toc .markdown-section { padding-right: 24px !important; }
+
     @media (min-width: 1200px) {
       .right-toc.show { display: block; }
       body.show-toc .content { padding-right: 230px !important; }
-      body.show-toc .markdown-section { max-width: none !important; padding-right: 0 !important; }
+      body.show-toc .markdown-section { max-width: none !important; padding-right: 16px !important; }
       .toc-fab { display: none !important; }
       .toc-overlay { display: none !important; }
     }

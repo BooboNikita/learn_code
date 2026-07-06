@@ -118,6 +118,9 @@
     }
     body.show-toc .markdown-section { padding-right: 24px !important; }
 
+    /* sidebar 只保留一级分类，隐藏所有二级子项 */
+    .sidebar ul li ul { display: none !important; }
+
     @media (min-width: 1200px) {
       .right-toc.show { display: block; }
       body.show-toc .content { padding-right: 230px !important; }

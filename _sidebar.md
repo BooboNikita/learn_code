@@ -24,6 +24,7 @@
     - [MySQL 执行流程](后端/MySQL/MySQL执行流程.md)
     - [MySQL 行记录存储结构](后端/MySQL/MySQL行记录存储结构.md)
     - [MySQL 事务隔离与 MVCC](后端/MySQL/MySQL事务隔离与MVCC.md)
+    - [MySQL 锁机制](后端/MySQL/MySQL锁机制.md)
   - [Redis](后端/Redis/README.md)
   - [消息队列](后端/消息队列/README.md)
     - [消息队列架构作用](后端/消息队列/消息队列架构作用.md)

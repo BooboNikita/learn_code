@@ -113,7 +113,9 @@ R1 训练出的长思维链数据可以蒸馏到 Qwen、Llama 等小模型：
 
 ## 四、DeepSeek-V4：公开信息梳理
 
-> 来源：智东西对 DeepSeek-V4 技术报告的解读（2026-04-24），以及公开报道。
+> 来源：智东西对 DeepSeek-V4 技术报告的解读（2026-04-24）、Thinking Machines《On-Policy Distillation》（2025-10）、Agarwal et al. (2023) 等公开资料。
+>
+> 注意：OPD 本身不是 DeepSeek 首创，DeepSeek-V4 是将其应用于超大 MoE 模型的后训练，并做了全词表 logit 蒸馏、多领域专家等工程实现。
 
 ### 4.1 双版本策略
 
@@ -139,6 +141,8 @@ R1 训练出的长思维链数据可以蒸馏到 Qwen、Llama 等小模型：
 ### 4.3 后训练：OPD 基于策略的蒸馏
 
 > 一句话：V4 把 V3.2 的「混合强化学习」阶段，替换成了更可控的 **On-Policy Distillation（OPD）**。
+>
+> OPD 不是 DeepSeek 首创：Agarwal et al. (2023) 提出《On-Policy Distillation of Language Models》，Thinking Machines 在 2025 年 10 月也系统推广了这一方法。DeepSeek-V4 的创新在于**把 OPD 用到 1.6T 参数的 MoE 模型上，并用多个领域专家作为教师**。
 
 **OPD 两阶段**：
 

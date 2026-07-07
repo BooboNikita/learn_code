@@ -75,5 +75,6 @@
     - [Loop 工程化](人工智能/大语言模型/Loop工程化.md)
     - [Agent 记忆机制](人工智能/大语言模型/Agent记忆机制.md)
     - [父子 Agent 通信](人工智能/大语言模型/父子Agent通信.md)
+    - [大模型评测指标](人工智能/大语言模型/大模型评测指标.md)
   - [AI 编程工具](人工智能/AI编程工具/README.md)
     - [Claude Code 与 Codex 对比](人工智能/AI编程工具/ClaudeCode与Codex对比.md)

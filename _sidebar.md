@@ -27,6 +27,7 @@
     - [MySQL 锁机制](后端/MySQL/MySQL锁机制.md)
     - [MySQL 加锁规则](后端/MySQL/MySQL加锁规则.md)
     - [MySQL 日志机制](后端/MySQL/MySQL日志机制.md)
+    - [MySQL 分页优化](后端/MySQL/MySQL分页优化.md)
   - [Redis](后端/Redis/README.md)
   - [消息队列](后端/消息队列/README.md)
     - [消息队列架构作用](后端/消息队列/消息队列架构作用.md)

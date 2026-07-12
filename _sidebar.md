@@ -32,6 +32,7 @@
   - [Redis](后端/Redis/README.md)
     - [Redis 常见面试题](后端/Redis/Redis常见面试题.md)
     - [Redis 数据类型与应用场景](后端/Redis/Redis数据类型与应用场景.md)
+    - [Redis 分布式锁](后端/Redis/Redis分布式锁.md)
   - [消息队列](后端/消息队列/README.md)
     - [消息队列架构作用](后端/消息队列/消息队列架构作用.md)
     - [消息队列防重复](后端/消息队列/消息队列防重复.md)

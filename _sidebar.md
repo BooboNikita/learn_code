@@ -30,6 +30,7 @@
     - [MySQL 分页优化](后端/MySQL/MySQL分页优化.md)
     - [SQL 优化指南](后端/MySQL/SQL优化指南.md)
   - [Redis](后端/Redis/README.md)
+    - [Redis 常见面试题](后端/Redis/Redis常见面试题.md)
   - [消息队列](后端/消息队列/README.md)
     - [消息队列架构作用](后端/消息队列/消息队列架构作用.md)
     - [消息队列防重复](后端/消息队列/消息队列防重复.md)

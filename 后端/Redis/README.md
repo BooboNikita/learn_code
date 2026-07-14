@@ -17,3 +17,4 @@
 - [Redis 数据类型与应用场景](Redis数据类型与应用场景.md)
 - [Redis 分布式锁](Redis分布式锁.md)
 - [Redis 哨兵机制](Redis哨兵机制.md) — 主从架构下自动故障转移：监控、选主、通知 + 主观/客观下线 + Leader 选举 + 四步故障转移。
+- [Redis 集群原理](Redis集群原理.md) — 切片集群方案：16384 哈希槽分片 + Smart Client 路由 + MOVED/ASK 重定向 + Gossip 协议 + 故障转移。

@@ -43,6 +43,7 @@
     - [微服务高可用保障](后端/微服务/微服务高可用保障.md)
     - [Spring Cloud Alibaba 微服务基础](后端/微服务/Spring Cloud Alibaba 微服务基础.md)
     - [Sentinel 限流熔断与 Gateway 网关](后端/微服务/Sentinel 限流熔断与 Gateway 网关.md)
+    - [Seata 分布式事务与 RocketMQ 消息](后端/微服务/Seata 分布式事务与 RocketMQ 消息.md)
   - [分布式](后端/分布式/README.md)
     - [分布式事务](后端/分布式/分布式事务.md)
     - [分布式事务详解](后端/分布式/分布式事务详解.md)

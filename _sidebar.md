@@ -44,6 +44,7 @@
     - [Spring Cloud Alibaba 微服务基础](后端/微服务/Spring Cloud Alibaba 微服务基础.md)
     - [Sentinel 限流熔断与 Gateway 网关](后端/微服务/Sentinel 限流熔断与 Gateway 网关.md)
     - [Seata 分布式事务与 RocketMQ 消息](后端/微服务/Seata 分布式事务与 RocketMQ 消息.md)
+    - [SCA 综合实战与生产踩坑](后端/微服务/SCA 综合实战与生产踩坑.md)
   - [分布式](后端/分布式/README.md)
     - [分布式事务](后端/分布式/分布式事务.md)
     - [分布式事务详解](后端/分布式/分布式事务详解.md)

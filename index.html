@@ -148,6 +148,39 @@
       .markdown-section { padding-right: 0 !important; }
       .toc-fab { display: block; }
     }
+
+    /* ===== 桌面端：侧边栏折叠定制 ===== */
+    /* 收起侧边栏后，正文区不整体左移，保持原有位置与宽度居中。
+       若希望收起后正文铺满全屏居中，删掉下面 body.close .content 这条即可。 */
+    .sidebar-desk-toggle { display: none; }
+    @media (min-width: 768px) {
+      body.close .content { left: 300px; }
+      .sidebar-desk-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        top: 16px;
+        left: 306px;
+        z-index: 50;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border: 1px solid rgba(0,0,0,.14);
+        border-radius: 6px;
+        background: rgba(255,255,255,.94);
+        color: #5b6670;
+        font-size: 13px;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0,0,0,.08);
+        transition: color .15s, border-color .15s;
+      }
+      .sidebar-desk-toggle:hover {
+        color: #42b983;
+        border-color: #42b983;
+      }
+    }
   </style>
 </head>
 <body>
@@ -168,6 +201,9 @@
     <div class="right-toc-title">本文目录</div>
     <ul id="right-toc-list"></ul>
   </div>
+
+  <!-- 桌面端侧边栏折叠按钮 -->
+  <button class="sidebar-desk-toggle" id="sidebar-desk-toggle" aria-label="收起或展开侧边栏" title="收起/展开侧边栏">☰</button>
 
   <!-- 移动端目录弹窗遮罩 -->
   <div class="toc-overlay" id="toc-overlay"></div>
@@ -333,6 +369,27 @@
       }
       // 3. 兜底：任何 hash 变化都关掉欢迎页
       window.addEventListener('hashchange', hideWelcome);
+    })();
+  </script>
+
+  <script>
+    // 桌面端侧边栏折叠：切换 body.close，并记住用户偏好（仅 >=768px 生效）
+    (function () {
+      var KEY = 'desk-sidebar-closed';
+      function isDesktop() { return window.innerWidth >= 768; }
+      function apply(closed) {
+        document.body.classList.toggle('close', closed);
+        try { localStorage.setItem(KEY, closed ? '1' : '0'); } catch (e) {}
+      }
+      var btn = document.getElementById('sidebar-desk-toggle');
+      if (btn) {
+        btn.addEventListener('click', function () {
+          apply(!document.body.classList.contains('close'));
+        });
+      }
+      try {
+        if (localStorage.getItem(KEY) === '1' && isDesktop()) apply(true);
+      } catch (e) {}
     })();
   </script>
 </body>

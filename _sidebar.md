@@ -20,6 +20,9 @@
     - [JVM 面试题](后端/Java/JVM面试题.md)
     - [Java 并发编程面试题](后端/Java/Java并发编程面试题.md)
   - [Python 基础](后端/Python/README.md)
+  - [C++](后端/C++/README.md)
+    - [版本演进总结](后端/C++/版本演进.md)
+    - [C++ 面试题](后端/C++/C++面试题.md)
   - [MySQL](后端/MySQL/README.md)
     - [MySQL 执行流程](后端/MySQL/MySQL执行流程.md)
     - [MySQL 行记录存储结构](后端/MySQL/MySQL行记录存储结构.md)
@@ -92,6 +95,13 @@
     - [PPO、DPO、GRPO 对齐算法](人工智能/大语言模型/PPO-DPO-GRPO对齐算法.md)
   - [AI 编程工具](人工智能/AI编程工具/README.md)
     - [Claude Code 与 Codex 对比](人工智能/AI编程工具/ClaudeCode与Codex对比.md)
+    - [Claude Code 记忆机制](人工智能/AI编程工具/ClaudeCode记忆机制.md)
+    - [DeepSeek Harness 解析](人工智能/AI编程工具/DeepSeekHarness解析.md)
   - [面试与求职](人工智能/面试与求职/README.md)
     - [数智工程师备考指南](人工智能/面试与求职/CSG-AI-Arch-Exam-Prep.md)
     - [笔试题库 100 题](人工智能/面试与求职/Exam-Question-Bank-100.md)
+
+- 📱 移动端
+  - [移动端概览](移动端/README.md)
+  - [Kotlin 语言基础](移动端/Kotlin语言基础.md)
+  - [Kotlin 面试题](移动端/Kotlin面试题.md)

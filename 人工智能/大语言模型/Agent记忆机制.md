@@ -2,6 +2,8 @@
 
 > 一句话总结：**Claude Code 的 agent 记忆 = 静态层（CLAUDE.md 6 层级声明式指令）+ 动态层（结构化文件 + 小模型做选择题）**，用「土到反直觉」的磁盘 markdown，治了业界向量检索方案的四个病根。
 
+> 姊妹篇：《[Claude Code 记忆机制](../AI编程工具/ClaudeCode记忆机制.md)》覆盖官方机制全貌与 2026 年最新动态（Auto Dream、Session Memory、上下文管理）。
+
 ---
 
 ## 0. 为什么 LLM 不需要"记忆"机制

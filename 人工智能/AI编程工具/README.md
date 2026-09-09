@@ -5,6 +5,7 @@
 ## 已收录内容
 
 - [Claude Code 与 Codex 对比分析](ClaudeCode与Codex对比.md)
+- [Claude Code 记忆机制](ClaudeCode记忆机制.md)（CLAUDE.md / Auto Memory / Auto Dream 四套机制，架构内幕见[大语言模型分类的 Agent 记忆机制](../大语言模型/Agent记忆机制.md)）
 
 ## 核心关注点
 

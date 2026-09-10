@@ -2,3 +2,6 @@
 .trae/documents/
 .trae/rules/
 .trae/cache/
+
+# WorkBuddy 本地记忆与运行数据
+.workbuddy/

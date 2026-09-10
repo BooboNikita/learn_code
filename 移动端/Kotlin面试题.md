@@ -10,6 +10,15 @@
 - 注意：`val` 不保证"指向的对象不可变"——`val list = mutableListOf(...)` 仍可增删元素。
 - 结论：能 `val` 就 `val`，不可变性让代码更安全、更易推理（与 Java 中"默认可变、需 final"相反）。
 
+```kotlin
+val name = "Kotlin"               // 只读引用
+name = "Java"                     // 编译错误：Val cannot be reassigned
+var count = 0                     // 可变引用
+count++                           // OK
+val list = mutableListOf(1, 2, 3)
+list.add(4)                       // OK：val 保证的是"引用不可变"，对象内容仍可变
+```
+
 ### 1.2 Kotlin 相比 Java 有哪些主要优点？
 
 - **空安全**：编译期通过 `?` / `?.` / `?:` 消灭大部分 NPE。
@@ -27,6 +36,17 @@
 - `===`：**引用相等**，即 Java 的 `==`（比较地址）。
 - 面试延伸：`val a = 1000; val b = 1000; a == b` 为 true；基本类型包装在 `-128..127` 内 `===` 也为 true（缓存）。
 
+```kotlin
+data class User(val id: Int)
+val u1 = User(1); val u2 = User(1)
+u1 == u2     // true：equals 比较内容
+u1 === u2    // false：两个不同对象，地址不同
+
+val a = 1000; val b = 1000
+a == b       // true
+a === b      // false：超出 -128..127 不走缓存，各自装箱
+```
+
 ### 1.4 `data class` 自动生成了什么？有何限制？
 
 - 自动生成：`equals()`、`hashCode()`、`toString()`、`copy()`、`componentN()`（解构）。
@@ -35,6 +55,16 @@
   - 生成的 `equals` 只比较**主构造函数里的属性**，类体中的属性不参与。
   - `copy` 是浅拷贝。
   - data class 不能是 open（默认 final），可加 `data` 到 sealed 子类。
+
+```kotlin
+data class Person(val name: String, val age: Int) {
+    var nickname: String = ""      // 类体属性：不参与 equals/hashCode/copy
+}
+val p1 = Person("Tom", 18)
+val p2 = p1.copy(age = 20)         // 浅拷贝并修改部分属性
+val (name, age) = p1               // componentN 解构
+p1 == Person("Tom", 18)            // true：只比较主构造函数里的属性
+```
 
 ### 1.5 `object`、`companion object` 与 Java `static` 的关系？
 
@@ -86,6 +116,17 @@ public static final boolean isPhone(String $this) { ... }
 
 - Android 典型用法：`lateinit` 用于依赖注入/onCreate 中初始化的 View、Adapter；`lazy` 用于属性按需懒加载。
 
+```kotlin
+class DetailActivity : AppCompatActivity() {
+    lateinit var adapter: ItemAdapter          // 承诺"稍后 onCreate 里一定赋值"
+    val config: Config by lazy { loadConfig() } // 首次访问 config 时才真正加载
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        adapter = ItemAdapter()                 // 此刻初始化 lateinit
+    }
+}
+```
+
 ### 1.8 `sealed class`（密封类）是什么？为何常用于 Android 状态建模？
 
 - 密封类：**子类受限**——所有直接子类必须与它同文件（Kotlin 1.5+ 放宽为同模块、同包）。
@@ -124,6 +165,24 @@ fun f(x: Any) {
 - Kotlin 支持**声明处变型**（在类声明处标 in/out），Java 只能用**使用处通配符**。
 - `*` 星投影 ≈ Java 的裸类型 `List<?>`。
 
+```kotlin
+open class Animal
+class Dog : Animal()
+
+// out 协变（生产者，只读）：Dog 列表可以当 Animal 列表用
+fun printAnimals(animals: List<out Animal>) {
+    val a: Animal = animals[0]          // 只能读出 Animal
+    // animals.add(Dog())               // 编译报错：协变集合禁止写入
+}
+printAnimals(listOf(Dog()))             // List<Dog> 可传入
+
+// in 逆变（消费者，只写）：Animal 列表可以当 Dog 列表用
+fun fillDogs(dst: MutableList<in Dog>) {
+    dst.add(Dog())                      // 只能写入 Dog
+}
+fillDogs(mutableListOf<Animal>())       // 父类型容器可传入
+```
+
 ### 1.11 Kotlin 有哪些作用域函数？如何区分？
 
 | 函数 | 上下文对象 | 返回值 | 典型用途 |
@@ -140,6 +199,12 @@ val tv = TextView(this).apply {      // 配置完返回自身
     textSize = 18f
 }
 val len = name?.let { it.length } ?: 0   // 可空安全处理
+val info = with(person) { "$name-$age" } // this 指向 person，返回拼接结果
+listOf(1, 2).also { println(it) }        // it 指向列表本身，打日志后原样返回
+val size = run {                         // 独立作用域：临时变量不污染外层
+    val tmp = listOf(1, 2, 3)
+    tmp.size                             // 返回 3
+}
 ```
 
 ## 二、空安全
@@ -175,6 +240,16 @@ println(a!!.length)     // 抛 NullPointerException
 - **按不可空使用**：运行期若 Java 返回 null 会崩；按可空使用则安全。
 - 应对：优先在 Java 侧加 JetBrains 空注解（`@Nullable/@NonNull`），或 Kotlin 侧一律按可空处理。
 
+```java
+// Java：无任何空注解，返回类型在 Kotlin 眼里是 String!（平台类型）
+public String getName() { return null; }    // 运行期可能真的返回 null
+```
+
+```kotlin
+val name: String = javaUser.name    // 按非空使用 → 返回 null 时立即抛 NPE
+val safe: String? = javaUser.name   // 按可空处理 → 安全，配合 ?. 使用
+```
+
 ## 三、与 Java / JVM 的关系与互操作
 
 ### 3.1 Kotlin 与 JVM 是什么关系？它是如何运行的？
@@ -199,10 +274,31 @@ println(a!!.length)     // 抛 NullPointerException
 | `@Throws` | 声明抛出的受检异常，让 Java 侧能捕获 |
 | `@JvmMultifileClass` | 多个文件顶层函数合并到一个类 |
 
+```kotlin
+class UserApi {
+    @JvmField
+    val cache: MutableMap<String, String> = HashMap()   // Java 直接 userApi.cache 字段访问
+
+    @JvmOverloads
+    fun load(id: String = "1", force: Boolean = false) {}
+    // Java 侧自动得到三个重载：load() / load(String) / load(String, boolean)
+}
+```
+
 ### 3.3 Kotlin 顶层函数/属性在 Java 中如何访问？
 
 - 顶层函数编译进以文件名命名的类：`utils.kt` 顶层函数 `fun create()` → Java 调 `UtilsKt.create()`。
 - 用 `@file:JvmName("Utils")` 自定义类名；`@file:JvmMultifileClass` 合并多文件。
+
+```kotlin
+// utils.kt
+fun create(): Utils = Utils()     // Java 调用：UtilsKt.create()
+
+// 另一个文件（注解写在文件首行，作用于整个文件）
+@file:JvmName("StringUtils")
+package com.example
+fun create2(): Utils = Utils()    // Java 调用：StringUtils.create2()
+```
 
 ### 3.4 Kotlin 有静态成员吗？为什么用 companion object？
 
@@ -222,11 +318,23 @@ println(a!!.length)     // 抛 NullPointerException
 - 但**编译期智能处理**：能优化成 JVM 原始类型 `int/long` 时自动优化，避免装箱开销（无法确定时退化为包装类型）。
 - 集合中 `List<Int>` 底层仍是装箱的 `Integer`。
 
+```kotlin
+val a: Int = 42                       // 局部变量 → 编译为原始类型 int，无装箱
+val b: Int? = a                       // 需要可空 → 必须装箱为 Integer
+val list: List<Int> = listOf(1, 2)    // 集合元素全部装箱为 Integer
+```
+
 ### 3.7 Kotlin 的 `Unit` 与 Java `void` 的区别？
 
 - Java `void` 不是类型，方法声明为无返回。
 - Kotlin `Unit` 是**真实类型**（单例 object），可作为泛型参数、可赋值给变量、可作函数返回值：`fun f(): Unit`、`Function<Unit>`。
 - 与 `Nothing` 区分：`Nothing` 表示"永远不返回"（如 `throw`、`error()`、`TODO()`），是所有类型的子类型。
+
+```kotlin
+fun fail(msg: String): Nothing = throw IllegalArgumentException(msg)
+val host: String = config.host ?: fail("host 不能为空")  // Nothing 可赋给任何类型，分支类型仍是 String
+val u: Unit = println("hi")                              // Unit 是真实类型，可以赋值给变量
+```
 
 ## 四、协程
 
@@ -245,6 +353,14 @@ println(a!!.length)     // 抛 NullPointerException
 
 - 一句话：**协程不是"更快的线程"，而是"可挂起的计算"，靠线程池执行、靠状态机恢复**。
 
+```kotlin
+runBlocking {
+    repeat(100_000) {
+        launch { delay(1_000) }   // 十万个协程同时"等待"，底层只用少量线程
+    }                             // 换成 Thread(100_000 个) 会直接 OOM
+}
+```
+
 ### 4.2 `suspend` 关键字的原理？
 
 - `suspend` 标记**挂起函数**，只能在协程或其他 suspend 函数中被调用。
@@ -252,6 +368,16 @@ println(a!!.length)     // 抛 NullPointerException
   - 隐藏的 `Continuation` 参数（回调）记录"恢复点"。
   - 函数体被拆成多个状态，遇到 `delay`/网络 IO 等真正挂起点时返回，之后由调度器回调 continuation 恢复执行。
 - 所以挂起**不阻塞线程**，线程空闲可执行其他协程。
+
+```kotlin
+// 源码写法
+suspend fun fetchUser(id: Int): User = api.getUser(id)
+
+// 编译器实际生成（示意）：多出隐藏的 Continuation 参数，返回值变为 Object（状态机）
+fun fetchUser(id: Int, completion: Continuation<User>): Any? {
+    // 内部按挂起点拆成多个分支状态，恢复时从上次的 label 继续执行
+}
+```
 
 ### 4.3 `Dispatchers` 有哪几种？
 
@@ -264,6 +390,18 @@ println(a!!.length)     // 抛 NullPointerException
 
 - `withContext(Dispatchers.IO)` 切换上下文且**结束后自动回到原上下文**。
 - 注意：IO 与 Default 共享底层线程池，可复用线程。
+
+```kotlin
+viewModelScope.launch {                            // 1. Main 主线程启动
+    val user = withContext(Dispatchers.IO) {       // 2. 切到 IO 做网络请求
+        api.getUser(id)
+    }
+    val sorted = withContext(Dispatchers.Default) { // 3. 切到 Default 做 CPU 排序
+        user.items.sortedByDescending { it.time }
+    }
+    binding.name.text = user.name                  // 4. 自动回到 Main，直接更新 UI
+}
+```
 
 ### 4.4 `launch` 与 `async` 的区别？
 
@@ -286,6 +424,15 @@ val r = d.await()                                    // 挂起等待结果
   - 异常会沿层级传播。
 - 好处：不再需要手动管理每个任务的取消与生命周期，避免**协程泄漏**（如 Activity 销毁后协程还在跑）。
 
+```kotlin
+viewModelScope.launch {              // 父作用域
+    launch { fetchDetail() }         // 子协程 1
+    launch { fetchComments() }       // 子协程 2
+    // 无需逐个记录 Job：ViewModel 销毁时 viewModelScope.cancel()
+    // → 两个子协程自动取消，不会在页面销毁后继续跑
+}
+```
+
 ### 4.6 协程如何取消？`cancel()` 后还在执行吗？
 
 - `job.cancel()` / `scope.cancel()` 发出取消信号；`isActive`/`ensureActive()` 检查。
@@ -293,17 +440,47 @@ val r = d.await()                                    // 挂起等待结果
 - 纯 CPU 循环不检查取消则不会停止（需 `isActive` 判断）。
 - 取消异常是**正常流程**，不应 catch 后吞掉，否则协程无法取消。
 
+```kotlin
+val job = launch(Dispatchers.Default) {
+    while (isActive) {               // CPU 密集循环没有挂起点，必须手动检查
+        computeChunk()
+    }
+}
+job.cancel()
+
+// 错误示范：catch (e: Exception) { } 会把 CancellationException 一并吞掉
+// → 协程"取消"后仍在继续跑；正确做法是 rethrow 或使用 runCatching 后重新抛出
+```
+
 ### 4.7 `runBlocking` 与协程的关系？为什么 Android 主线程不能用？
 
 - `runBlocking` 会**阻塞当前线程**直到内部协程完成，是"桥接"阻塞世界与协程世界用的（测试、main 函数）。
 - Android 主线程调用 `runBlocking` 会**卡死 UI**，严禁使用；替代：viewModelScope/lifecycleScope 的 `launch`。
 - 理解即可：非阻塞的协程不能从阻塞的 API 直接创建，需要桥接。
 
+```kotlin
+fun main() = runBlocking {           // main / 单元测试中桥接用
+    launch { delay(100); println("world") }
+    println("hello")                 // 先输出 hello，100ms 后输出 world
+}
+// Android 主线程等价写法 = 卡死 UI，严禁：runBlocking { api.getUser(id) }
+```
+
 ### 4.8 `CoroutineScope` 与 `GlobalScope` 的区别？
 
 - `GlobalScope`：**独立生命周期**，不与任何组件绑定，无法被统一取消 → 容易泄漏，**不推荐**（测试/少量场景除外）。
 - `CoroutineScope`：由 `CoroutineScope()`/`MainScope()` 或组件的扩展创建（如 `viewModelScope`），随组件销毁自动取消。
 - Android 常用作用域：`viewModelScope`（ViewModel 清除时取消）、`lifecycleScope`（Lifecycle 销毁时取消）、`repeatOnLifecycle`。
+
+```kotlin
+// 反面：GlobalScope 泄漏
+GlobalScope.launch { uploadLogs() }      // Activity 销毁后仍在跑，且无法统一取消
+
+// 正面：生命周期绑定
+class MyViewModel : ViewModel() {
+    fun load() = viewModelScope.launch { api.getUser(1) }
+}   // ViewModel.onCleared() 时 viewModelScope 自动 cancel
+```
 
 ### 4.9 Kotlin Flow 是什么？与 RxJava 的区别？
 
@@ -320,6 +497,18 @@ val r = d.await()                                    // 挂起等待结果
 
 - Android 状态流：`StateFlow`（状态持有，类似 LiveData 的协程版）、`SharedFlow`（事件流）。
 - Flow 是**冷流**：只有 collect 时才开始；用 `stateIn/sharedIn` 可转热流。
+
+```kotlin
+// 冷流：声明时什么也不做，collect 时才逐个 emit
+val userFlow: Flow<User> = flow {
+    emit(api.getUser(1))
+}.map { it.copy(name = it.name.trim()) }
+
+// 转热流：作为 ViewModel 的状态持有
+val state: StateFlow<UiState> = userFlow
+    .map { UiState.Success(it) }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState.Loading)
+```
 
 ### 4.10 网络请求协程化（Retrofit）为什么快？
 
@@ -363,12 +552,33 @@ fun Counter() {
 - StateFlow：协程版状态流——更纯粹、无生命周期概念，需自己配合 `repeatOnLifecycle` 收集；支持协程操作符。
 - 建议：新项目用 `StateFlow` + `collectAsState()`（Compose）或 `repeatOnLifecycle`；LiveData 维护老代码。
 
+```kotlin
+class UserViewModel : ViewModel() {
+    private val _state = MutableStateFlow<UiState>(UiState.Loading)
+    val state: StateFlow<UiState> = _state.asStateFlow()   // 对外只读，防 UI 误写
+
+    fun load() = viewModelScope.launch {
+        runCatching { api.getUser(1) }
+            .onSuccess { _state.value = UiState.Success(it) }
+            .onFailure { _state.value = UiState.Error(it.message ?: "未知错误") }
+    }
+}
+```
+
 ### 5.4 Kotlin 协程在 Android 里如何避免"后台任务泄漏"？
 
 - 不要用 `GlobalScope`；**用生命周期绑定的作用域**：
   - Activity/Fragment → `lifecycleScope`。
   - ViewModel → `viewModelScope`（`viewModelScope` 内部是 `SupervisorJob + Dispatchers.Main.immediate`）。
 - 销毁自动 cancel；UI 收集 Flow 用 `repeatOnLifecycle(Lifecycle.State.STARTED)` 保证只在可见时收集。
+
+```kotlin
+lifecycleScope.launch {
+    repeatOnLifecycle(Lifecycle.State.STARTED) {   // 可见才开始收集
+        viewModel.state.collect { render(it) }     // 进入后台自动停止，省流量省电
+    }
+}
+```
 
 ### 5.5 Android 里 `when` + sealed class 的好处举例？
 
@@ -378,6 +588,17 @@ fun Counter() {
 
 - 声明式 UI 依赖"状态 → UI"的确定性映射：不可变数据 + 单向数据流更容易推导重组范围。
 - `StateFlow`/`collectAsState` 与 Compose 重组天然配合，状态更新精准触发重组而非整页刷新。
+
+```kotlin
+@Composable
+fun UserScreen(vm: UserViewModel = viewModel()) {
+    val state by vm.state.collectAsState()   // state 变化 → 只有依赖它的部分重组
+    when (val s = state) {
+        is UiState.Success -> UserList(s.data)   // data class 不可变，重组范围可控
+        else -> LoadingIndicator()
+    }
+}
+```
 
 ### 5.7 Kotlin 与 Java 混编时 Android 项目注意什么？
 
@@ -406,10 +627,31 @@ inline fun <reified T> Any.asType(): T? = this as? T
 - **属性委托**：`by lazy`（懒加载）、`by Delegates.observable`（监听变化）、`by map`（从 Map 取属性，适合解析 JSON/配置）、`by remember`（Compose）。
 - 原理：委托属性编译时生成 `getValue/setValue` 的辅助类调用。
 
+```kotlin
+// 属性变化监听
+var name: String by Delegates.observable("<unset>") { _, old, new ->
+    println("$old -> $new")
+}
+
+// 从 Map 取属性：JSON/配置解析常用
+val prefs = mapOf("theme" to "dark", "lang" to "zh")
+val theme: String by prefs          // theme == "dark"
+
+// 类委托：接口实现转发给成员，省掉手写转发代码
+interface Repo { fun get(): String }
+class RepoImpl : Repo { override fun get() = "data" }
+class RepoView(repo: Repo) : Repo by repo
+```
+
 ### 6.3 `apply`/`also` 的返回值设计动机？
 
 - `apply/also` 返回接收者本身 → 便于链式配置；`let/run` 返回 lambda 结果 → 便于转换。
 - 面试常问"为什么需要两个返回自身的？"：`apply` 用 `this`（配置对象成员自然），`also` 用 `it`（强调副作用、不想遮蔽 this）。
+
+```kotlin
+user.apply { name = "Tom"; age = 20 }          // this：成员直接写，适合批量配置
+user.also { log("created user ${it.name}") }   // it：与外层同名属性不冲突，适合副作用
+```
 
 ### 6.4 Kotlin 协程的异常传播机制？
 
@@ -419,6 +661,13 @@ inline fun <reified T> Any.asType(): T? = this as? T
   - `SupervisorJob`/`supervisorScope`：**隔离异常**，子协程失败不影响兄弟与父。
   - `try/catch` 包 `await()` 或协程体。
 - `viewModelScope` 使用 SupervisorJob，故其子协程异常需自己 catch（官方推荐 catch 后转 UiState.Error）。
+
+```kotlin
+val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+scope.launch { throw IllegalStateException("任务 A 失败") }   // 只取消自己
+scope.launch { println("任务 B 不受影响，继续执行") }
+// 若换成普通 Job：任务 A 的异常会取消整个 scope，任务 B 也跟着死掉
+```
 
 ### 6.5 手写/设计题：如何用协程实现"并发请求两个接口再合并"？
 

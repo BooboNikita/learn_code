@@ -63,6 +63,13 @@ int Counter::count_ = 0;    // 类外定义（C++17 起可用 inline 省去）
 - 继承空基类可能被空基类优化（EBO），子类可仍是 1 字节。
 - 内存对齐会放大：`int + char` 类大小是 8 而非 5。
 
+```cpp
+struct Empty {};                        // sizeof == 1
+struct VEmpty { virtual void f(); };    // sizeof == 8（64 位，只有 vptr，空类占位字节被优化掉）
+struct A { int i; char c; };            // sizeof == 8（4 + 1 对齐到 8）
+struct B : Empty { char c; };           // sizeof == 1（EBO 空基类优化）
+```
+
 ### 1.6 宏、内联函数、`constexpr` 的区别？
 
 | 维度 | 宏 #define | inline 函数 | constexpr |
@@ -226,43 +233,310 @@ struct C { char c; int i; };      // = 5
 
 ### 3.1 什么是虚函数？多态的实现原理？
 
+**考察点**：动态绑定机制、vtable/vptr 内存模型。
+
+**回答要点**：
+
 - **虚函数**：`virtual` 修饰的成员函数，通过基类指针/引用调用时**动态绑定**到实际对象版本。
-- **实现**：类含虚函数 → 编译器生成**虚表（vtable，存函数指针数组）**，对象内存头部放**虚表指针（vptr）**。
-- 调用流程：取对象 vptr → 查 vtable → 间接调用对应函数（运行期决定，代价为一次间接跳转）。
-- 多态三要素：**继承 + 虚函数重写 + 基类指针/引用调用**。
+- **实现**：类含虚函数 → 编译器为每个类生成一张**虚表（vtable，函数指针数组，一个类一份，存于只读数据段）**；每个对象头部放一个**虚表指针（vptr，一个对象一份，随对象初始化）**。
+- 调用流程：取对象 vptr → 查 vtable 中对应槽位 → 间接调用函数。运行期决定，代价是**一次间接寻址 + 无法内联**。
+- 多态三要素：**继承 + 虚函数重写 + 基类指针/引用调用**，三者缺一不可。
+- 追问：vtable 编译期生成，vptr 在构造函数中由编译器插入的代码写入——这就是构造函数不能是虚函数的原因（见 3.2）。
+
+**Demo 1：基本多态 + 静态绑定对比**
 
 ```cpp
-class Animal { public: virtual void speak() { cout << "animal\n"; } };
-class Dog : public Animal { public: void speak() override { cout << "wang\n"; } };
+#include <iostream>
+using namespace std;
 
-Animal* p = new Dog();
-p->speak();          // wang —— 动态绑定，看的是真实对象类型
+class Animal {
+public:
+    void eat()        { cout << "animal eat\n"; }   // 非虚：静态绑定
+    virtual void speak() { cout << "animal speak\n"; } // 虚：动态绑定
+    virtual ~Animal() = default;
+};
+class Dog : public Animal {
+public:
+    void eat()   { cout << "dog eat\n"; }           // 隐藏，不是重写
+    void speak() override { cout << "wang\n"; }     // 重写
+};
+
+int main() {
+    Dog dog;
+    Animal& r = dog;          // 基类引用
+    r.eat();                  // animal eat  —— 非虚函数，编译期看引用类型
+    r.speak();                // wang        —— 虚函数，运行期看真实对象
+
+    Animal a;
+    Animal* p = &a;  p->speak();   // animal speak
+    p = &dog;        p->speak();   // wang：同一句调用，结果随对象变 → 多态
+}
 ```
 
-### 3.2 构造函数为什么不能是虚函数？析构函数为什么通常要 virtual？
-
-- **构造函数不能虚**：构造对象时类型是确定的，且虚表 vptr 在构造期间才被初始化（先于构造体），调用虚机制没有意义；虚函数需要对象已存在。
-- **析构函数要虚**：通过基类指针 `delete` 派生类对象时，若析构非虚，只会调用基类析构 → 派生类资源**泄漏**。
-- 规则：**只要类会被继承，析构函数就声明 `virtual`**；不打算被继承的类（可加 `final`）则不必。
+**Demo 2：验证 vptr 的存在与 vtable 共享**
 
 ```cpp
-class Base  { public: virtual ~Base() = default; };   // 正确
-class Child : public Base { std::unique_ptr<X> x_; };  // 虚析构保证 x_ 被释放
+class NoVirtual { int x_; };        // 无虚函数
+class HasVirtual { int x_; public: virtual void f(); };
+
+// 64 位平台（GCC/Clang）：
+static_assert(sizeof(NoVirtual) == 4);    // 只有 int
+static_assert(sizeof(HasVirtual) == 16);  // vptr(8) + int(4) + 对齐到 8 的倍数
+
+// 同一个类的所有对象共享同一张 vtable：
+HasVirtual a, b;
+// (*(void**)&a) == (*(void**)&b) —— 两个对象头部的 vptr 相同（可用打印验证）
+void* vptr_a = *(void**)&a;
+void* vptr_b = *(void**)&b;
+cout << boolalpha << (vptr_a == vptr_b) << endl;   // true
 ```
 
-### 3.3 构造函数里能调用虚函数吗？会多态吗？
+### 3.2 构造函数为什么不能是虚函数？析构函数为什么必须是 virtual？
 
-- **不能得到多态效果**。构造基类子对象期间，vptr 指向**基类的虚表**，调用的是基类版本。
-- 析构函数同理：析构派生类时虚表已切回基类。
-- 原因：派生类部分此时还没构造/已被销毁，调用其虚函数是不安全的。
+**考察点**：对象构造/析构与虚机制建立的先后关系。
+
+**回答要点**：
+
+- **构造函数不能虚**：
+  - 虚调用依赖对象里的 vptr，而 vptr 是在**构造过程中**才被赋值的——鸡生蛋问题；
+  - 构造时类型是确定的（`new Dog` 就是 Dog），不需要动态绑定；
+  - 从 vtable 角度：vptr 都还没写入，无从查表。
+- **析构函数要虚**：通过基类指针 `delete` 派生类对象时，若析构非虚，**静态绑定**到基类析构 → 派生类部分资源**泄漏**。虚析构会被编译器特殊处理：`delete p` 时先虚派发到最终派生类析构，再自动逐层向上析构。
+- 规则：**只要类可能被继承并通过基类指针管理，析构函数就声明 `virtual`**；不打算被继承的类加 `final` 或析构用 `protected` 非虚（阻止基类指针 delete）。
+- 追问：**虚析构本身是虚函数**，也会占用 vtable 槽位；一个含虚函数的类，其析构是否 virtual 不影响对象大小。
+
+**Demo：非虚析构导致泄漏（用打印模拟资源释放）**
+
+```cpp
+#include <iostream>
+using namespace std;
+
+struct Bad {
+    ~Bad() { cout << "~Bad\n"; }                    // 非虚析构
+};
+struct BadChild : Bad {
+    int* data_;
+    BadChild()  : data_(new int[100]) { }
+    ~BadChild() { cout << "~BadChild (释放 data_)\n"; delete[] data_; }
+};
+
+struct Good {
+    virtual ~Good() { cout << "~Good\n"; }          // 虚析构
+};
+struct GoodChild : Good {
+    int* data_;
+    GoodChild()  : data_(new int[100]) { }
+    ~GoodChild() { cout << "~GoodChild (释放 data_)\n"; delete[] data_; }
+};
+
+int main() {
+    Bad* b = new BadChild;
+    delete b;      // 只打印 ~Bad！BadChild 析构没执行 → data_ 泄漏 100*4 字节
+    Good* g = new GoodChild;
+    delete g;      // 依次打印 ~GoodChild (释放 data_) → ~Good，完整释放
+}
+```
+
+### 3.3 构造/析构函数里调用虚函数会多态吗？
+
+**考察点**：构造/析构期间 vptr 的指向变化。
+
+**回答要点**：
+
+- **不会多态**。执行到某层的构造函数时，vptr 被**临时指向该层类的 vtable**：
+  - 构造顺序：基类构造 → vptr 切到基类表 → 基类构造体内虚调用解析为**基类版本**；
+  - 进入派生类构造体前，vptr 才切到派生类表。
+- 析构对称：进入派生类析构体时 vptr 已切回派生类表，析构完基类前又切回基类表。
+- **原因（安全角度）**：基类构造时派生类成员尚未初始化，若派发到派生类版本，会操作未初始化的数据 → C++ 有意如此设计。
+- 最佳实践：构造/析构中**不要调用虚函数**；需要"构造后初始化"时用工厂函数或两段式 `init()`。
+
+**Demo：构造期虚调用永远打到当前层**
+
+```cpp
+#include <iostream>
+using namespace std;
+
+class Base {
+public:
+    Base() { hook(); }                 // 期望调用派生类版本？不会！
+    virtual void hook() { cout << "Base::hook\n"; }
+    virtual ~Base() = default;
+};
+class Derived : public Base {
+    int id_;
+public:
+    Derived() : id_(42) { hook(); }    // 此时 vptr 已切到 Derived，才会多态
+    void hook() override { cout << "Derived::hook, id_=" << id_ << '\n'; }
+};
+
+int main() {
+    Derived d;
+    // 输出：
+    // Base::hook            ← Base() 内调用，vptr 还指着 Base 的表
+    // Derived::hook, id_=42 ← Derived() 体内调用，vptr 已切到 Derived
+}
+```
 
 ### 3.4 重载（overload）、重写（override）、重定义（hide）的区别？
 
-- **重载**：同作用域、同名不同参，编译期决议（静态绑定）。
-- **重写**：派生类重写基类**虚函数**，要求签名一致 + `virtual`，运行期动态绑定；建议加 `override` 让编译器检查。
-- **重定义（隐藏）**：派生类定义了与基类同名（不管参数）的普通函数，会把基类版本**隐藏**，调用需 `基类::` 限定。
+**考察点**：三种"同名函数"关系的辨析，高频陷阱题。
 
-### 3.5 初始化列表的作用？成员初始化顺序？
+**回答要点**：
+
+| 维度 | 重载 overload | 重写 override | 隐藏 hide |
+| ---- | ------------- | ------------- | --------- |
+| 作用域 | **同一类**中 | 基类 ↔ 派生类 | 基类 ↔ 派生类 |
+| 条件 | 同名不同参（仅返回值不同不行） | 基类 `virtual` + **签名一致**（协变返回除外） | 派生类任意同名函数（非重写） |
+| 绑定时机 | 编译期（静态） | 运行期（动态） | 编译期（静态） |
+| 防错手段 | — | 加 `override` 让编译器检查 | 用 `using Base::f;` 把基类重载引入派生类 |
+
+- 隐藏的坑：只要派生类有同名函数，**基类的所有重载版本全部被隐藏**（名字查找先于重载决议）。
+
+**Demo：一例看清三者**
+
+```cpp
+#include <iostream>
+using namespace std;
+
+class Base {
+public:
+    void f()               { cout << "Base::f()\n"; }       // 将被隐藏
+    void f(int)            { cout << "Base::f(int)\n"; }    // 将被隐藏（连带）
+    virtual void g()       { cout << "Base::g()\n"; }       // 将被重写
+};
+
+class Derived : public Base {
+public:
+    void f()               { cout << "Derived::f()\n"; }    // 隐藏 Base 的两个 f
+    void g() override      { cout << "Derived::g()\n"; }    // 重写
+    // using Base::f;      // 取消注释后 d.f(1) 才能编译通过
+};
+
+int main() {
+    Derived d;
+    Base* p = &d;
+
+    d.f();       // Derived::f()   —— 隐藏，静态绑定
+    // d.f(1);   // 编译错误！Base::f(int) 被名字隐藏，哪怕参数匹配也不参与查找
+    d.Base::f(1);  // Base::f(int) —— 显式限定才能调
+
+    p->g();      // Derived::g()   —— 重写，动态绑定
+}
+```
+
+### 3.5 什么是纯虚函数与抽象类？接口类怎么定义？
+
+**考察点**：抽象类语义、接口设计规范。
+
+**回答要点**：
+
+- `virtual void f() = 0;` 为**纯虚函数**；含有纯虚函数的类是**抽象类**，**不能实例化**，只能作基类。
+- 派生类必须**实现全部**纯虚函数才能实例化，否则它也是抽象类（可用来做"半成品中间层"）。
+- 纯虚函数**可以有函数体**（提供公共默认实现，派生类用 `Base::f()` 显式调用），但类仍抽象。
+- 接口类规范：**全纯虚函数 + 虚析构 + 无数据成员**；C++20 可用 `= 0` 配合 concepts 表达能力约束。
+- 与虚析构的关系：接口类即使没有资源也**必须虚析构**，因为使用方一定通过基类指针 delete。
+
+**Demo：抽象类 + 接口风格的完整用例**
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <vector>
+using namespace std;
+
+class IShape {                          // 接口类
+public:
+    virtual double area() const = 0;
+    virtual void   print() const = 0;
+    virtual ~IShape() = default;        // 接口类必备
+};
+
+class Circle : public IShape {
+    double r_;
+public:
+    explicit Circle(double r) : r_(r) {}
+    double area() const override { return 3.14159 * r_ * r_; }
+    void   print() const override {
+        cout << "Circle r=" << r_ << " area=" << area() << '\n';
+    }
+};
+
+class Rect : public IShape {
+    double w_, h_;
+public:
+    Rect(double w, double h) : w_(w), h_(h) {}
+    double area() const override { return w_ * h_; }
+    void   print() const override {
+        cout << "Rect " << w_ << "x" << h_ << " area=" << area() << '\n';
+    }
+};
+
+int main() {
+    // IShape s;                       // 编译错误：抽象类不能实例化
+    vector<unique_ptr<IShape>> shapes;
+    shapes.push_back(make_unique<Circle>(2.0));
+    shapes.push_back(make_unique<Rect>(3.0, 4.0));
+
+    double total = 0;
+    for (auto& s : shapes) {           // 面向接口编程
+        s->print();
+        total += s->area();
+    }
+    cout << "total = " << total << '\n';
+    // Circle r=2 area=12.5664
+    // Rect 3x4 area=12
+    // total = 24.5664
+}
+```
+
+### 3.6 菱形继承的 DDD（钻石问题）？虚继承如何解决？
+
+**考察点**：多继承二义性、虚基类机制。
+
+**回答要点**：
+
+- 菱形继承：B、C 都继承 A，D 同时继承 B、C → **D 中含两份 A 子对象**，访问 A 成员产生歧义，数据也可能不一致。
+- 解法：**虚继承** `class B : virtual public A`，B/C 共享同一个 A 子对象（虚基类），D 中只保留一份。
+- 实现：虚基类子对象由**最终派生类**直接初始化（D 的构造函数初始化列表里直接写 `A(...)`），B/C 对 A 的初始化在最终派生类构造时被跳过。
+- 代价：访问虚基类成员需要额外间接（类似 vtable 的 vbtable/vptr 指针），对象变大、构造复杂；**日常开发优先用组合或单继承 + 接口替代多继承**。
+
+**Demo：普通菱形 vs 虚继承**
+
+```cpp
+#include <iostream>
+using namespace std;
+
+// ---- 普通菱形：两份 A ----
+namespace bad {
+struct A { int v = 1; };
+struct B : A {};
+struct C : A {};
+struct D : B, C {};
+}
+// ---- 虚继承：一份 A ----
+namespace good {
+struct A { int v = 1; };
+struct B : virtual A {};
+struct C : virtual A {};
+struct D : B, C {};
+}
+
+int main() {
+    bad::D d1;
+    // d1.v = 2;            // 编译错误：二义性，d1 有两份 v（B::A::v 和 C::A::v）
+    d1.B::v = 2;            // 只改了 B 路径那份，C::A::v 仍是 1 → 数据不一致
+    cout << d1.B::v << ' ' << d1.C::v << '\n';   // 2 1
+
+    good::D d2;
+    d2.v = 2;               // OK：只有一份 A 子对象
+    cout << d2.v << ' ' << d2.B::v << '\n';      // 2 2 —— 三个名字同一个变量
+
+    cout << sizeof(bad::D) << ' '                // 8：两份 int
+         << sizeof(good::D) << '\n';             // 24（arm64 clang）：2 个 vbptr + 1 份 A
+}
+```
+
+### 3.7 初始化列表的作用？成员初始化顺序？
 
 - **作用**：必须用它初始化——`const` 成员、引用成员、没有默认构造函数的类成员、基类。
 - 用初始化列表可**少一次默认构造**（直接拷贝初始化，而非先默认构造再赋值），性能更好。
@@ -278,29 +552,9 @@ public:
 };
 ```
 
-### 3.6 拷贝构造/拷贝赋值的参数为什么必须用引用？
+### 3.8 拷贝构造/拷贝赋值的参数为什么必须用引用？
 
 - 如果按值传参，拷贝形参时需要调用拷贝构造本身 → **无限递归**。
-
-### 3.7 什么是纯虚函数与抽象类？接口类怎么定义？
-
-- `virtual void f() = 0;` 为**纯虚函数**，含有纯虚函数的类是**抽象类**，**不能实例化**。
-- 派生类必须实现全部纯虚函数才能实例化。
-- 用抽象基类模拟"接口"：全纯虚函数 + `virtual ~`。
-
-```cpp
-class IShape {                      // 纯接口
-public:
-    virtual double area() const = 0;
-    virtual ~IShape() = default;
-};
-```
-
-### 3.8 菱形继承的 DDD（钻石问题）？
-
-- 菱形继承：B、C 继承 A，D 同时继承 B、C → A 的成员在 D 中存两份，产生歧义。
-- 解法：**虚继承** `class B : virtual public A`，让 A 子对象只保留一份。
-- 代价：虚继承引入额外间接层，访问稍慢；日常开发优先用**组合**替代多继承。
 
 ## 四、现代 C++（C++11 及以后）
 
@@ -405,6 +659,20 @@ auto s = std::get<std::string>(v);
 
 - `override`：显式声明"重写基类虚函数"，签名不匹配时**编译报错**（防手滑写错签名变成隐藏）。
 - `final`：类上加 `final` 禁止被继承；虚函数上加 `final` 禁止派生类重写。
+
+```cpp
+struct Base { virtual void f(int); virtual void g(); };
+
+struct Derived : Base {
+    void f(int) override;      // OK
+    // void f(double) override;  // 编译错误：没有可重写的基类版本
+    void g() final;            // 孙辈不能再重写 g
+};
+struct Grand final : Derived { // final 类：到此为止，不许再继承
+    // void g() override;      // 编译错误：g 已被 final
+};
+// struct X : Grand {};        // 编译错误：Grand 是 final 类
+```
 
 ## 五、STL 容器与算法
 

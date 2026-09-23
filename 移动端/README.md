@@ -4,6 +4,7 @@
 
 ## 学习要点
 
+- Android 体系：四大组件与生命周期、Handler/Looper 消息机制、Binder IPC、View 绘制与事件分发、进程/线程与 ANR、内存与性能优化。
 - 语言基础：空安全、`val/var`、扩展函数、密封类、作用域函数。
 - Kotlin 与 JVM/Java：字节码编译、互操作注解（`@JvmStatic` 等）、混编迁移。
 - 协程：`suspend`、`Dispatchers`、结构化并发、Flow。
@@ -13,6 +14,8 @@
 
 ## 文档
 
+- [Android 基础](Android基础.md)：系统架构、四大组件与生命周期、Handler 与 Binder、View 绘制与事件分发、进程线程与内存、存储网络、Jetpack/Compose、性能优化。
+- [Android 面试题](Android面试题.md)：组件/消息机制/IPC/View/线程 ANR/内存性能/架构 Compose 高频题与开放题。
 - [Kotlin 语言基础](Kotlin语言基础.md)：Kotlin 是什么、与 JVM/Java 的关系、Android 中的使用、核心语法速览。
 - [Kotlin 面试题](Kotlin面试题.md)：基础语法 / 空安全 / 协程 / Android 使用 / JVM 互操作 / 进阶 高频题与要点。
 - [Kotlin 语法糖对照](Kotlin语法糖.md)：Android 常用语法糖（空安全、data class、扩展函数、作用域函数、协程 KTX 等）与手写 Java 等价物逐条对照。

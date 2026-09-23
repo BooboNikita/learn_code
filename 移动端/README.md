@@ -15,6 +15,7 @@
 
 - [Kotlin 语言基础](Kotlin语言基础.md)：Kotlin 是什么、与 JVM/Java 的关系、Android 中的使用、核心语法速览。
 - [Kotlin 面试题](Kotlin面试题.md)：基础语法 / 空安全 / 协程 / Android 使用 / JVM 互操作 / 进阶 高频题与要点。
+- [Kotlin 语法糖对照](Kotlin语法糖.md)：Android 常用语法糖（空安全、data class、扩展函数、作用域函数、协程 KTX 等）与手写 Java 等价物逐条对照。
 - [Flutter 渲染树与渲染流程](Flutter/README.md)：三棵树职责与 diff 复用、一帧渲染管线、布局/绘制边界与性能优化、高频面试题。
 
 ## 推荐资料

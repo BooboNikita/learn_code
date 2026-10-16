@@ -21,8 +21,8 @@
 - [Kotlin 面试题](Kotlin面试题.md)：基础语法 / 空安全 / 协程 / Android 使用 / JVM 互操作 / 进阶 高频题与要点。
 - [Kotlin 语法糖对照](Kotlin语法糖.md)：Android 常用语法糖（空安全、data class、扩展函数、作用域函数、协程 KTX 等）与手写 Java 等价物逐条对照。
 - [Flutter 渲染树与渲染流程](Flutter/README.md)：三棵树职责与 diff 复用、一帧渲染管线、布局/绘制边界与性能优化、高频面试题。
-- [React Native 基础](ReactNative基础.md)：原生渲染定位与跨端对比、Bridge 到新架构（JSI/TurboModules/Fabric/Codegen）、线程模型与渲染流程、Yoga 与 Flexbox 差异、组件与列表优化、原生互操作、动画、工程化与版本演进。
-- [React Native 面试题](ReactNative面试题.md)：定位对比 / 架构与通信 / 渲染与布局 / 组件与状态 / 原生互操作 / 动画 / 工程化与热更新 / 开放题 高频题与要点。
+- [React Native 基础](ReactNative基础.md)：原生渲染定位与跨端对比、Bridge 到新架构（JSI/TurboModules/Fabric/Codegen）、深入 JSI 与 HostObject 机制、Fabric 渲染器三棵树与不可变影子树、线程模型与渲染流程、Yoga 与 Flexbox 差异、组件与列表优化、setNativeProps 及其替代、原生互操作、动画、工程化与版本演进。
+- [React Native 面试题](ReactNative面试题.md)：定位对比 / 架构与通信（含 JSI 实现机制、Fabric 渲染细节）/ 渲染与布局 / 组件与状态 / 原生互操作 / 动画 / 工程化与热更新 / 开放题 高频题与要点。
 
 ## 推荐资料
 

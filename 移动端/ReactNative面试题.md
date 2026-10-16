@@ -95,22 +95,71 @@
   - **JSI HostObject**：双向且**同步**，JS 直接持有 C++ 对象引用。
   - 补充：旧桥下还有 `UIManager.dispatchViewManagerCommand`（命令式操作原生视图），新架构下行为已变化，需逐个用例回归。
 
+### 2.7 JSI 是怎么实现同步调用的？HostObject 机制是什么？
+
+- **考察点**：能否从"引擎本身就是 C++ 库"这个前提出发推导，而不是背结论。
+- **要点**：
+  - **前提**：Hermes / JSC / V8 都是 C/C++ 实现，各自导出原生 C++ API。所以"JS 调 C++"物理上就是 **C++ 调 C++**；JSI 做的不是建通道，而是**把各引擎 API 统一抽象**成 `jsi::Runtime`，让框架代码引擎无关。
+  - `jsi::Value` **不是 JSON**，是 C++ 中表示 JS 值的类型（tagged union，Hermes 用 NaN-boxing 压进 64 位），能持有 JS 堆对象引用 → 零拷贝的前提。
+  - **机制**：`HostObject` 是 C++ 接口（`get` / `set` / `getPropertyNames`）。用 `createFromHostObject` 挂到全局后，引擎在自己的 JS 堆里创建一个特殊对象，背后是指向 C++ 对象的指针。
+  - **调用链**：属性查找命中 HostObject → 引擎**回调** `HostObject::get()` → 返回 `createFunctionFromHostFunction` 造的 `jsi::Function`（函数体是 C++ lambda）→ 调用它直接进 C++。
+  - **为什么同步、无序列化**：方向是**引擎 upcall C++**（不是 JS 发消息）；**同一次调用栈** + **引用传递而非值传递**，所以既不用排队也不用编解码。
+  - **约束**：线程亲和（`jsi::Value` 只在所属 JS 线程安全，Hermes runtime 单线程）；`HostObject` 横跨 JS GC 与 C++ 所有权；同步即可能阻塞；与引擎版本耦合。
+  - **调用边界（常被追问"C++ 还是 native"）**：JSI 的接口**全是 C++**（`jsi::Runtime` / `HostObject` / `HostFunction`），**没有 Java/ObjC 入口**，所以经 JSI 调用的目标必然是 **C++ 方法**；平台代码（Java/Kotlin、ObjC/Swift）位于 C++ **之下**，由 C++ 经 **JNI**（Android）或 **ObjC++**（iOS）触达。纯 C++ 能完成的不下探（Yoga 布局读取、Hermes API）；只有 TurboModule 与 Fabric 挂载这类才走到平台层 —— 这也是"纯 C++ TurboModule 可双端共用一份"的原因。
+  - **术语提醒**：老架构的 "native module" 特指 Java/ObjC 模块，新架构的 "native" 常包含 C++ 层，答题时点明所指可避免歧义。
+  - **类比**：`JSI : RN ≈ N-API / node-addon-api : Node.js`，但 JSI 追求引擎无关，而非跨版本 ABI 稳定。
+
+### 2.8 Fabric 渲染器具体做了什么？
+
+- **考察点**：是否理解 Fabric 不只是"换成 C++"，而是换了渲染范式。
+- **要点**：
+  - **三棵树**：React Element 树（JS 堆）/ React Shadow 树（**C++、不可变、持有 Yoga 布局**）/ Host View 树（真实原生视图）。
+  - **更新流程**：**克隆**受影响的影子节点 → Yoga 重算布局 → diff → 提交 **mutation list** 给 mounting 层。
+  - **为什么必须不可变**：不可变 = 可并发。React 能在后台以低优先级准备一棵树、被高优先级工作打断时整棵丢弃，因为从未碰过用户正在看的视图。**这是 Fabric 与老渲染器最本质的区别**，也是 `useTransition` / `Suspense` / 优先级调度能真正生效的前提。
+  - **同步布局**（靠 JSI）：消除 `measure` 回调往返与 `onLayout` 时序竞态；文本测量在 C++ 里统一，双端一致。
+  - **视图扁平化**：纯布局用的 `View` 不创建宿主视图，省内存；但对它调 `findNodeHandle` 拿不到结果。
+  - **事件优先级**：点击等离散事件优先级高于滚动等连续事件。
+  - **迁移面**：`UIManager.dispatchViewManagerCommand` → `codegenNativeCommands`；`findNodeHandle` + `measure` → 原生 ref 的 `.measure()`；`setNativeProps` 不再支持；老视图组件靠 interop 层过渡。
+
+### 2.9 换成 Fabric 之后为什么就能同步了？老架构为什么做不到？
+
+- **考察点**：这是"JSI 为什么同步"的**架构侧追问**——上题问机制，这题问**为什么老架构即使想同步也做不到**。答"因为用了 C++"是不及格的。
+- **要点**：
+  - **先纠正前提**：Yoga 布局在老架构里**也是同步算的**（在原生侧）。所以"异步"不是算不出来，而是 **JS 拿不到**——答案在通信方式，不在计算方式。
+  - **老架构为什么必然异步**（三层递进）：
+    1. 影子树在**原生侧**（Java/ObjC），JS 侧只有 React 的元素/实例树，布局结果对 JS 不可见；
+    2. JS 与原生之间**只有 Bridge 一条通道**：消息队列 + 跨线程投递 + JSON 序列化；
+    3. 队列语义决定了**投递方无法决定对端何时处理**，所以拿返回值只能靠回调 → `measure` 必然是"发起 → 等 → 回调"。
+  - **补充**：Bridge 的存在本身是**刻意的隔离设计**（JS 线程与 UI 线程互不阻塞、崩溃不互相传染）。代价就是所有跨端访问被迫变成"值拷贝 + 排队"——**是架构选择排除了同步，不是技术做不到**。
+  - **Fabric 改对了哪三件事**（缺一不可，建议作为答题骨架）：
+    - 影子树搬到 **C++ 层**，与 JS 引擎同进程、同地址空间；
+    - 访问方式从 **Bridge 消息（值传递 + 排队）** 变为 **JSI 调用（引用传递 + 直接压栈）**；
+    - 布局计算是 **Yoga 纯计算**——输入节点树与约束输出 frame，无副作用、不依赖 UI 线程状态，因此**谁在栈上调用都能算**。
+    - 三者合起来，`measure()` 退化成普通 C++ 函数调用：JS 线程压栈 → 读（必要时算）布局 → **同一栈帧返回**。函数调用天然有返回值、天然同步。
+  - **同步的边界（最容易被追问、也最容易答错）**：同步的是「JS ↔ 影子树 / C++」这一段，不是整条更新链路。
+    - 同步：JS 读布局、读写影子树属性、TurboModule 声明的同步方法。
+    - 不同步：`setState` → render → diff（仍是 React 调度）；commit → mounting → 上屏（仍可按优先级调度到 UI 或 JS 线程）。
+    - 推论：`setState` 后**不能立即**通过 ref 读到新布局，要等下一次 commit。
+  - **代价**：同步 = 在 JS 线程调用栈上执行，一个慢的 C++ 实现会**直接卡住 JS 线程**。这正是并非所有 API 都做成同步的原因，也是"同步 API 要克制使用"的依据。
+
 ## 三、渲染与布局
 
 ### 3.1 一次状态更新到屏幕显示，RN 内部发生了什么？
 
 - **考察点**：能否完整串起 Reconciler → Shadow Tree → Yoga → 挂载。
 - **要点**：
-  - ① 状态变化 → ② **React Reconciler（ReactFabric）**在 JS 线程做 diff → ③ 生成/更新 **React Shadow Tree（C++）** → ④ **Yoga** 单遍计算布局 → ⑤ Commit 提交挂载指令 → ⑥ **UI 线程同步创建/更新原生控件** → 上屏。
+  - ① 状态变化 → ② **React Reconciler（ReactFabric）**在 JS 线程做 diff → ③ 生成/更新 **React Shadow Tree（C++）** → ④ **Yoga** 递归计算布局（测量 → 定位） → ⑤ Commit 提交挂载指令 → ⑥ **UI 线程同步创建/更新原生控件** → 上屏。
   - 新架构与老架构的差别集中在 ③④⑤：老架构要经 Bridge 排队与序列化，新架构在 C++ 内同步完成。
 
 ### 3.2 Yoga 是什么？为什么 RN 的布局比浏览器快？
 
-- **考察点**：是否理解"单遍布局"这一关键差异。
+- **考察点**：是否理解"布局是纯计算 + 有缓存"这一关键差异（而不是笼统背"单遍布局"）。
 - **要点**：
-  - Yoga 是 C/C++ 实现的 **Flexbox 子集布局引擎**，跨平台同一份算法，保证三端布局一致。
-  - 以 `YGNode` 组成布局树，`YGNodeCalculateLayout` **一次自顶向下算完**，没有浏览器 CSS 的多轮 reflow / 复杂尺寸传播。
-  - RN 0.74 起内置 **Yoga 3.0**，`gap`、`flex` 等语义与 Web 更对齐。
+  - Yoga 是 C/C++ 实现的 **Flexbox 子集布局引擎**，跨平台同一份算法，保证三端布局一致；它本身是通用库，RN 只是调用方之一。
+  - 入口 `YGNodeCalculateLayout(root, w, h, direction)`，内部递归 `calculateLayoutInternal`，每个节点**要么完整解算一次，要么整棵子树被跳过**。
+  - **快的真实原因**：① 布局是**纯计算**（输入节点树 + 约束，输出 frame，无副作用、不回查 DOM），不存在浏览器的 reflow 抖动；② 内容尺寸由 **measure 函数预先提供**并被缓存；③ **两级跳过**——Yoga 内部按脏标记 + `generationCount` 跳子树，RN 侧 `layoutIfNeeded()` 只在影子树脏时才调 Yoga；④ 可以离线 / 后台算，不占主线程。
+  - **别答"单遍布局"**：准确说法是"**测量（定 flex basis）+ 定位两趟递归**，但在同一轮遍历内完成、不需要回查外部状态，所以没有多轮 reflow"。这么讲才不会被追问倒。
+  - RN 0.74 起内置 **Yoga 3.0**：`gap`、`flex` 语义更对齐 Web，新增 `alignContent: 'space-evenly'`，修正 `row-reverse` 下边缘翻转的老 bug（breaking change）。
 
 ### 3.3 RN 的 Flexbox 和 Web 的 Flexbox 有哪些关键差异？
 
@@ -131,6 +180,27 @@
   - `flex: 1` 需要有"可分配的空间"，父容器高度必须是确定的（被自身父级约束住）。
   - Android 上常见问题是 `flex: 1` 链路上溯不到根（中间某一层没有 `flex: 1` 或固定高度）→ 高度塌成 0，表现为"列表空白但能滚动"或"文本不显示"。
   - 排查：临时给容器加 `backgroundColor` 看区域是否存在；逐层确认高度来源；列表需 `flex: 1` 才能撑满。
+
+### 3.5 Yoga 的布局计算流程具体分几步？它是怎么知道文本有多高的？
+
+- **考察点**：是否了解 Yoga 的递归结构、测量模式与 measure 函数机制。
+- **要点**：
+  - **单节点内部四步**：① 测量并确定每个子节点的 `computedFlexBasis`（优先级 `flex-basis` → 主轴上的确定尺寸 → **递归 measure**）→ ② 按 `flexWrap` 组成 FlexLine，用 `flexGrow/flexShrink` 分配主轴空间 → ③ 对齐（`justifyContent` / `alignItems` / `alignContent` / 基线）→ ④ 写回 `left/top/width/height` 并按 `pointScaleFactor` 圆整到物理像素。
+  - **绝对定位节点在主流程之后单独处理**：不参与 flex 分配，但要等父节点 padding/border 与 `position: static` 的祖先确定后才算。
+  - **三种测量模式**：`Undefined`（max-content，无约束）、`AtMost`（fit-content，不超过给定值）、`Exactly`（stretch-fit，正好是这个值）。模式由上下文决定，并且**是缓存的 key**。
+  - **文本高度靠 measure 函数**：Yoga 不知道文本自然尺寸，叶子节点上挂 `YGNodeSetMeasureFunc` 回调，需要时向宿主（RN 的 `TextLayoutManager`）询问。挂 measure 函数的节点**不能有布局子节点**。
+  - **缓存**：`cachedLayout` / `cachedMeasures` 按 `(width, widthMode, height, heightMode)` 复用，所以**不能假设 measure 一定会被调用**，最终尺寸要读布局结果。
+  - 追问"为什么圆整"：不按像素圆整会出现亚像素模糊和 1px 缝隙；RN 传入的 `pointScaleFactor` 就是 `PixelRatio.get()`。
+
+### 3.6 子节点的尺寸会影响父节点（父容器高度由内容撑开），那 Yoga 还算自顶向下吗？
+
+- **考察点**：是否理解"自顶向下"只是约束方向，以及为什么必须两趟。
+- **要点**：
+  - 「自顶向下」指**约束（可用空间 + 测量模式）的传递方向**。一次递归里信息实际走三次、方向交替：① 约束下传 → ② 尺寸上传（`computedFlexBasis`，**只是假设值**）→ ③ 定位下传（`left/top` 与最终尺寸）。准确说法是**递归下降 + 回溯**（深度优先后序处理）。
+  - **追问"是三次全局扫描吗"要会否掉**：宏观只有**两趟遍历**——测量趟（`performLayout=false`，下行调用 + 上行返回，即 ①②）与定位趟（`performLayout=true`，纯下行写 `left/top`，即 ③）。**② 不是独立一趟，它就是测量趟递归调用的返回值**；① 与 ② 是同一次调用/返回的两端。子节点的调用区间嵌套在父节点的区间内，所以「下 - 上」在树的每一层重复出现。
+  - **为什么必须两趟**：父节点要先知道自己多大，才能给子节点定位（`left/top` 相对父、`alignItems: stretch` 依赖父尺寸）；而内容驱动的父节点又必须等子节点测完才知道自己多大——这是**真实的依赖环**，只能靠"测量 → 定位"两趟破环。这也解释了四步的顺序为什么不能换。
+  - **由此推出的三个事实**（容易被追问）：`flex-basis` 只是假设的主轴尺寸，弹性分配后才定最终值 → 同一子节点可能被以不同约束测量多次（measure cache 的意义）；父尺寸不确定时该轴上的百分比退化为 `auto`；滚动容器在滚动轴上给 `Undefined`，即不约束子节点。
+  - 结论：**最终尺寸要读布局结果，不要读 measure 的返回值**（那可能只是某一轮的假设值）。
 
 ## 四、组件、状态与渲染优化
 
@@ -189,6 +259,16 @@
   - 不能捕获：**事件回调**里的错误、异步代码（Promise/定时器）的错误、自身抛出的错误、原生崩溃。
   - 异步与全局错误需要 `ErrorUtils.setGlobalHandler` + 原生崩溃上报（Sentry/Bugly）。
 
+### 4.7 `setNativeProps` 是什么？为什么新架构不支持？
+
+- **考察点**：对"打破声明式模型"的代价是否有判断，而不是只记住"性能好"。
+- **要点**：
+  - 通过原生组件 ref 直接改写底层原生视图属性，**绕过 render / diff / React 树**。老架构下是性能逃生舱（每帧级更新不想走 Bridge）。
+  - **破坏点**：React 树不再反映真实视图，两边**永久不一致**；下一次 render 会把改动覆盖掉。
+  - **隐藏语义**：prop 会"粘住"（原生视图缓存上一次的 prop）+ `style` 是 merge 而非替换 → 原生视图里存在 render 从未声明的隐式状态，极难排查。
+  - **新架构明确不支持**：官方迁移文档称 "will not be supported in the post-Fabric world"。影子树不可变、由 React 完全持有，与绕过 React 直接改视图从根本冲突。0.82 起新架构是唯一架构，新代码不应再用。
+  - **替代**：提升为 state；`Animated` + `useNativeDriver`（限 transform / opacity）；Reanimated；受控 `TextInput`；命令式操作原生视图用 `codegenNativeCommands`。
+
 ## 五、原生互操作
 
 ### 5.1 怎么实现一个原生模块？新架构下写法有什么变化？
@@ -214,6 +294,19 @@
   - 老架构下所有数据都要过 Bridge，**序列化 + 单次事务容量**是硬约束（Binder 事务约 1MB 量级）。
   - 大数据/二进制走曲线方案：写临时文件传路径、原生侧使用共享内存、图片/视频用 URI 而非 base64。
   - 新架构下 JSI 可以传引用，但**也不要把它当共享内存数据库用**——跨语言传大对象的成本依然存在，设计上应尽量"传句柄，不传内容"。
+
+### 5.4 一个计算密集的任务，具体怎么"交给原生"？worklet 算原生吗？
+
+- **考察点**：能否区分"换线程"与"换执行体"，并给出可落地的路径与选型理由。
+- **要点**：
+  - **先纠偏（易错点）**：**worklet 不是原生**。它是 JS，只是跑在 Reanimated 的独立 UI runtime。收益是"不阻塞 JS 线程"，**单次计算速度不变**。
+  - **收益来源（别只答"Hermes 没 JIT"）**：更根本的限制是 **JS 单线程**。C++ 侧能做三件事：① 开线程池吃**多核**；② 写 **SIMD**（NEON/AVX）；③ **链接成熟原生库**（OpenCV / ONNX / FFmpeg / libsodium）。其中**多核是最大的一项**。
+  - **落地路径就是 TurboModule**，分两类：
+    - **纯 C++ TurboModule**：spec **文件名必须以 `Native` 开头**（否则 Codegen 忽略）；`codegenConfig` 声明 `type: "modules"`；实现放 `shared/` 目录，继承 Codegen 生成的 `<Name>CxxSpec`，**方法首参是 `jsi::Runtime&`**；一份代码双端通用。
+    - **平台 TurboModule**：需要平台 API 或链接原生库时，各端各实现一份（C++ 经 JNI / ObjC++ 触达）。
+  - **同步还是异步**：spec 里**不返回 `Promise` 即同步**（新架构特性）；耗时任务仍应异步，并经 `CallInvoker` 回 JS 线程。
+  - **最容易翻车的点**：边界**调用**本身便宜（亚毫秒），但**参数转换不一定**——`Object` / `Array` 会**递归**转成 `jsi::Value`，10 万条记录光转换就可能比计算本身还慢。对策：**传句柄/ID 而非内容**、**合并调用**（次数比体积更值得优化）、二进制用 **`ArrayBuffer`**（官方 Codegen 类型表未列入，属较新能力；必要时退回手写 JSI 绑定）、**别用 JSON 字符串传结构**。
+  - **能说出"不该搬"的理由更加分**：毫秒级计算不值得跨边界；每帧高频小计算用 TurboModule 反而更慢（优先 worklet）；**先 profile 再决定** —— Hermes 没 JIT 不等于它慢。
 
 ## 六、动画
 

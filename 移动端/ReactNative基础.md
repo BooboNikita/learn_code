@@ -92,7 +92,175 @@ React Common（C++）
 原生 UI 线程：同步创建/挂载原生控件 → 上屏
 ```
 
-### 2.3 新老架构对比
+### 2.3 深入：JSI 与 HostObject 机制
+
+**为什么 JS 能和 C++ 直接通信？**
+
+- 前提：**JS 引擎本身就是 C++ 库**。Hermes / JSC / V8 都是 C/C++ 实现，各自导出一套原生 API：JSC 的 `JSContextRef` / `JSObjectRef`，V8 的 `v8::Isolate` / `v8::FunctionTemplate`，Hermes 的 `HermesRuntime`。
+- 所以"JS 调 C++"物理上就是 **C++ 调 C++**。RN 做的事不是"建立一条通道"，而是**把这些各不相同的原生 API 抽象成一套统一接口**，这就是 JSI。
+
+```cpp
+class Runtime {                       // jsi::Runtime，各引擎各自实现
+ public:
+  virtual Value evaluateJavaScript(...) = 0;
+  virtual Object global() = 0;
+  virtual Value getProperty(const Object&, const PropNameID&) = 0;
+  virtual void setProperty(Object&, const PropNameID&, const Value&) = 0;
+  virtual Function createFunctionFromHostFunction(...) = 0;
+};
+```
+
+- `jsi::Value` **不是 JSON**，而是 C++ 里表示 JS 值的类型（tagged union；Hermes 进一步用 **NaN-boxing** 把类型和值压进 64 位），**可以持有 JS 堆对象的引用**——这是零拷贝的前提。
+- 实现类：`HermesRuntime` / `JSCRuntime` / `V8Runtime`。上层（Fabric、TurboModules）只依赖 `jsi::Runtime`，不关心底层是谁。
+
+**关键机制：HostObject / HostFunction**——让一个 C++ 对象在 JS 里"长得像普通对象"：
+
+```cpp
+class DeviceInfo : public jsi::HostObject {
+ public:
+  jsi::Value get(jsi::Runtime& rt, const jsi::PropNameID& name) override {
+    if (name.utf8(rt) == "getBatteryLevel") {
+      return jsi::Function::createFromHostFunction(
+        rt, name, 0,
+        [](jsi::Runtime&, const jsi::Value&, const jsi::Value*, size_t) {
+          return jsi::Value(0.82);          // 直接返回，没有任何序列化
+        });
+    }
+    return jsi::Value::undefined();
+  }
+};
+
+rt.global().setProperty(rt, "DeviceInfo",
+  jsi::Object::createFromHostObject(rt, std::make_shared<DeviceInfo>()));
+```
+
+JS 侧调用 `DeviceInfo.getBatteryLevel()` 的真实链路：
+
+| 步骤 | 发生什么 |
+| --- | --- |
+| ① | 引擎做属性查找，发现这是 **HostObject** 类型的特殊对象（背后是个 C++ 指针） |
+| ② | 引擎**回调** C++ 虚函数 `HostObject::get()`，同步、就地执行 |
+| ③ | 返回一个 `jsi::Function`——它在 JS 堆里有身份，函数体是 C++ lambda |
+| ④ | 引擎调用它，直接进入你的 C++ 代码 |
+| ⑤ | 返回 `jsi::Value`，本来就在 JS 堆里，直接交给 JS |
+
+- 方向是**"引擎回调 C++"（upcall）**，不是 JS 往 C++ 发消息。既然是函数调用，就天然同步、天然有返回值。
+- **同一次调用栈 + 引用传递（而非值传递）** = 既不需要序列化，也不需要跨线程排队。这就是同步能力真正的来源。
+
+**边界：JSI 只到 C++ 为止**
+
+JSI 的**全部接口都是 C++ 类型**——`jsi::Runtime`、`HostObject`、`HostFunction`，没有任何 Java/ObjC 入口。所以经 JSI 调用的一定是 **C++ 函数**：
+
+| 层 | 内容 | 如何被调用 |
+| --- | --- | --- |
+| JS 线程 / JS 堆 | 业务代码、React 渲染 | —— |
+| **C++ 层（JSI 的边界）** | `jsi::Runtime`、`HostObject`、`HostFunction`、Yoga、Shadow Tree | JS 经 JSI **直接**调用 |
+| 平台层 | Android 的 Java/Kotlin、iOS 的 ObjC/Swift | **由 C++ 中转**调用 |
+
+平台代码并不在 JS 的调用目标里，它是 **C++ 那一边继续往下走**才到达的：
+
+- **Android**：C++ 通过 **JNI**（RN 用 `facebook::jni` 封装）调到 Java/Kotlin。
+- **iOS**：`.mm`（Objective-C++）里 C++ 与 ObjC 可混编，C++ 中能直接写 `[obj doSomething]` 或调用 Swift。
+
+三条真实路径：
+
+| 场景 | 链路 | 是否到平台层 |
+| --- | --- | --- |
+| 读布局、调 Hermes | JS → C++ → 返回 | ❌ 不到 |
+| TurboModule | JS → Codegen 生成的 C++ spec（**纯转发**）→ JNI / ObjC++ → Java / ObjC | ✅ 到 |
+| Fabric 挂载 | JS → C++ ShadowTree → mounting → JNI / ObjC++ → `View` / `UIView` | ✅ 到 |
+
+所以答案要分两层：
+
+- **JS 经 JSI 调用的目标 = C++ 方法**（确定、无例外）。
+- **平台原生方法是 C++ 的实现细节**。里面是纯 C++ 还是转调平台，完全由那个 C++ 函数自己决定 —— 这也解释了为什么**纯 C++ 实现的 TurboModule 能双端共用一份**，不必写两遍 Java 和 ObjC。
+
+> 术语提醒：老架构语境里的 "native module" 通常特指 **Java/ObjC 模块**（那时 C++ 不参与）；新架构语境里的 "native" 往往**包含 C++ 层**。回答时点明"我指平台层还是 C++ 层"，可以省掉一轮解释。
+
+**代价与约束**
+
+- **线程亲和性**：`jsi::Value` 只在所属 JS 线程上安全（Hermes 的 runtime 是单线程的）。Reanimated 的 worklet 跑在**另一个独立 JS runtime**（UI runtime）里，而非跨线程共享同一个 runtime。
+- **生命周期与 GC**：`HostObject` 横跨 JS GC 与 C++ 所有权两个世界，跨边界持有对象要格外小心。
+- **同步就可能阻塞**：一个慢的 C++ 实现会直接拖住 JS 线程，同步 API 要克制使用。
+- **与引擎版本耦合**：JSI 是 C++ ABI 层面的东西，要跟引擎一起升级。
+
+**类比**：`JSI : React Native ≈ N-API / node-addon-api : Node.js`。区别在目标——N-API 追求跨 Node 版本的 ABI 稳定，JSI 追求**引擎无关**（RN 本身完成过从 JSC 到 Hermes 的替换）。
+
+### 2.4 深入：Fabric 渲染器
+
+Fabric 是 RN 的**新渲染器**：C++ 重写、双端共享，取代老架构的 `UIManager` 渲染路径。它管着"三棵树"：
+
+| 树 | 位置 | 职责 |
+| --- | --- | --- |
+| React Element 树 | JS 堆 | `render()` 返回的 React 元素，声明式描述 |
+| **React Shadow 树** | **C++（ReactCommon）** | **不可变**的影子节点，持有 Yoga 布局结果 |
+| Host View 树 | 原生 | 真实的 `UIView` / `android.view.View` |
+
+四个核心机制：
+
+1. **不可变影子树 + 克隆**
+   - 更新时**克隆受影响的节点**（而非就地修改）→ 在克隆树上跑 Yoga → diff 新旧 → 产出 **mutation list**。
+   - 为什么必须不可变：**不可变 = 可并发**。React 能在后台以低优先级准备一棵树，被更高优先级的工作打断时**整棵丢弃**——因为它从未碰过用户正在看的视图。
+   - 这是 React 18/19 的 `useTransition` / `Suspense` / 优先级调度能在 RN 上真正生效的前提，也是 Fabric 与老渲染器最本质的区别。
+2. **同步布局（靠 JSI）**
+   - 布局可在提交前**同步读取**，`onLayout` 的时序竞态与 `measure(callback)` 的往返基本消失；文本测量在 C++ 里统一做，双端结果一致。
+   - 为什么"换了渲染器就变同步"，见下方 [为什么可能同步](#为什么可能同步机制拆解)。
+3. **Commit → Mounting**
+   - 提交阶段把 mutation list（创建/更新/删除节点）交给 mounting 层执行；mounting 可按更新优先级调度到 UI 线程或 JS 线程。
+4. **视图扁平化（View Flattening）**
+   - 只用于布局、没有任何视觉属性的 `View` 可以**完全不创建宿主视图**，深层嵌套树的实际视图数明显减少。
+   - 副作用：对被"拍平"的 View 调 `findNodeHandle` 拿不到东西。
+
+#### 为什么可能同步（机制拆解）
+
+"同步"不是 Fabric 优化出来的，而是**影子树换了位置**之后自然出现的结果。
+
+**老架构的异步是架构选择，不是技术限制：**
+
+1. 影子树在**原生侧**（Java/ObjC），JS 侧只有 React 的元素/实例树——布局结果 JS 根本看不到。
+2. 两边之间**只有 Bridge 一条通道**：一个消息队列，跨线程投递 + JSON 序列化。
+3. 队列语义决定了**投递方无法决定对端何时处理**。想拿返回值就只能回调，于是 `measure` 必然是"发起 → 等 → 回调"三段式。
+
+**Fabric 改变了三件事，缺一不可：**
+
+| 条件 | 老架构 | Fabric |
+| --- | --- | --- |
+| 影子树位置 | 原生侧，JS 够不着 | **C++ 层**，与 JS 引擎同进程、同地址空间 |
+| 访问方式 | Bridge 消息（**值传递** + 排队） | **JSI 函数调用**（**引用传递** + 直接压栈） |
+| 布局计算的性质 | —— | Yoga 是**纯计算**：输入节点树 + 约束，输出 frame，无副作用、不依赖 UI 线程状态 |
+
+三条合起来，`measure()` 就退化成一次普通 C++ 函数调用：JS 线程压栈 → 进 C++ 影子树 → 读（必要时先算）布局 → **在同一栈帧返回**。既然是函数调用，就天然有返回值、天然同步。
+
+> 关键结论：**Yoga 布局在两边都是同步算的——差别只在 JS 能不能拿到。**
+
+#### 同步的边界（别答错）
+
+同步的是「JS ↔ 影子树 / C++」这一段，**不是整条 UI 更新链路**：
+
+| 环节 | 是否同步 |
+| --- | --- |
+| JS 读布局、读写影子树属性 | ✅ 同步 |
+| TurboModule 声明的同步方法 | ✅ 同步 |
+| `setState` → render → diff | ❌ 仍是 React 自己的调度 |
+| commit → mounting → 上屏 | ❌ mount 仍可按优先级调度到 UI 或 JS 线程 |
+
+所以 `setState` 之后**不能立即**通过 ref 读到新布局，那要等下一次 commit。另外，同步调用跑在 JS 线程的调用栈上——**一个慢的 C++ 实现会直接卡住 JS 线程**，这也是为什么并非所有 API 都被做成同步的。
+
+**事件优先级**：离散事件（点击）以更高优先级分发，连续事件（滚动）较低——点一下不会排在滚动更新队列的后面。
+
+**迁移影响**
+
+| 老 API | 现在 |
+| --- | --- |
+| `UIManager`（JS 侧命令式操作） | Fabric UIManager（C++），不再直接使用 |
+| `requireNativeComponent` + `RCTViewManager` | `codegenNativeComponent` + Fabric Component |
+| `UIManager.dispatchViewManagerCommand` | `codegenNativeCommands` |
+| `findNodeHandle` + `measure` | 直接在原生 ref 上调 `.measure()` |
+| `setNativeProps` | **不支持**，改用 state / `Animated` / Reanimated |
+
+- 老视图组件靠 **interop 兼容层**仍能运行，但 prop 更新可能滞后一帧，属于过渡方案（不要长期依赖）。
+
+### 2.5 新老架构对比
 
 | 维度 | 老架构 | 新架构 |
 | --- | --- | --- |
@@ -104,7 +272,7 @@ React Common（C++）
 | 并发特性 | 不支持 | 支持 React 18/19 Concurrent / Suspense |
 | 兼容性 | —— | 旧模块/旧视图需迁移，否则走 interop 兼容层 |
 
-### 2.4 版本演进要点
+### 2.6 版本演进要点
 
 | 版本 | 关键变化 |
 | --- | --- |
@@ -136,9 +304,10 @@ React Common（C++）
 | Shadow / 后台线程 | Yoga 布局计算、影子树维护（新架构下移至 C++ 共享层） | —— |
 
 - **JS 是单线程的**：所有组件渲染与业务逻辑排队执行，一段耗时 JS 会**同时**卡住 UI 更新与手势响应。
-- 因此重活要"切线程"或"交给原生"：
-  - 交给原生：`Animated` + `useNativeDriver`、Reanimated worklet、原生模块里跑。
-  - 交给别的 JS 运行时：`react-native-worklets` / 多 JS 线程方案、WebView 里跑、Worker 变通方案。
+- 因此重活要"切线程"或"交给原生" —— **两者动机不同，别混为一谈**：
+  - **交到别的 JS 运行时**（只解决"阻塞"，**不会更快**）：Reanimated 的 **worklet** 跑在独立的 UI runtime、`react-native-worklets` / 多 JS 线程方案、WebView 变通方案。它们**仍然是 JS，单次计算速度不变**。
+  - **交给原生**（真正的加速）：在 TurboModule 里用 C++ 跑 —— 收益来自**多核并行、SIMD、以及能链接成熟原生库**，详见 [8.4 落地场景](#84-落地场景把-cpu-密集计算交给原生)。
+  - 轻量动画 / 手势：`Animated` + `useNativeDriver`，属性更新直接在原生侧驱动，不下发 JS。
 - 新架构下，布局与挂载不再往返 JS 线程，**卡顿的主要来源收敛为"JS 线程执行时间 + 原生渲染耗时"两项**。
 
 ### 3.2 与 Android/iOS 线程的对应关系
@@ -156,7 +325,7 @@ React Common（C++）
         ▼
 ③ 生成/更新 React Shadow Tree（C++，节点是 ReactShadowNode）
         ▼
-④ Yoga 在 C++ 中单遍计算布局（flexbox 子集）
+④ Yoga 在 C++ 中计算布局（测量 → 定位两趟递归，flexbox 子集）
         ▼
 ⑤ Commit：新树提交 + 挂载指令（Mounting）
         ▼
@@ -166,11 +335,114 @@ React Common（C++）
 - 新架构的关键点：**影子树在 C++**，JS 侧与原生侧看到的是同一份布局结果，布局可以在提交前同步拿到。
 - 老架构等价流程由 Bridge 承担 ③④⑤ 的排队与序列化，所以才有明显延迟。
 
-### 4.2 Yoga：为什么布局快
+### 4.2 Yoga：布局计算流程
 
-- **Flexbox 子集**，用 C/C++ 实现，跨平台同一份算法 → 三端布局一致。
-- **单遍布局**：以 `YGNode` 组成布局树，`YGNodeCalculateLayout` 一次自顶向下算完，不像浏览器 CSS 存在多轮 reflow / 复杂尺寸传播。
-- 对齐 Web 的改动在 Yoga 3.0（RN 0.74）落地，`gap`、`flex` 语义更接近 CSS。
+**定位**：RN 的布局引擎，用 C/C++ 实现 Flexbox 子集，双端共用同一份算法 → 三端布局一致。它本身是个独立的通用库，RN 只是它的调用方之一。
+
+#### 4.2.1 入口与递归
+
+- 唯一入口 `YGNodeCalculateLayout(root, availableWidth, availableHeight, direction)`，内部转给递归函数 `calculateLayoutInternal`。
+- 计算是**自顶向下的一次递归**：每个节点要么被完整解算一次，要么**整棵子树被跳过**（见 4.2.5，另见 4.2.3 对"自顶向下"的辨析）。
+- 解算完把 `left/top/width/height`（相对父节点的 frame）写进节点的布局缓存 `cachedLayout`，RN 侧据此生成 `LayoutMetrics`。
+
+#### 4.2.2 单个节点内部：四步
+
+| 步骤 | 做什么 | 关键点 |
+| --- | --- | --- |
+| ① 测量主轴基准 | 为每个子节点解析 `computedFlexBasis` | 优先级：`flex-basis` → 主轴上的确定尺寸 → **递归 measure 子节点** |
+| ② 分行与弹性分配 | 按 `flexWrap` 组成 FlexLine，再用 `flexGrow` / `flexShrink` 分配主轴的剩余 / 不足空间 | 主轴定下来后，交叉轴才由内容决定 |
+| ③ 对齐 | `justifyContent`（主轴）、`alignItems` / `alignSelf`（交叉轴）、`alignContent`（多行之间）、基线对齐 | 基线对齐需要 **baseline 函数**，文本行才有共同基线 |
+| ④ 定位与像素圆整 | 写回 `left/top/width/height`，按 `pointScaleFactor` 圆整到物理像素 | 不圆整会出现亚像素模糊与 1px 缝隙；RN 传入的是 `PixelRatio.get()` |
+
+- **绝对定位节点在主流程之后单独处理**：它们不参与 flex 空间分配，但要等父节点的 padding/border 与 `position: static` 的祖先确定位置后才计算。
+- 各步骤对应的源码文件：`algorithm/CalculateLayout.cpp`（主流程）、`algorithm/FlexLine.cpp`（分行）、`algorithm/Baseline.cpp`（基线）、`algorithm/PixelGrid.cpp`（圆整）。
+
+#### 4.2.3 「自顶向下」指的是约束方向，不是信息只往下走
+
+先破一个疑惑：子节点的内容尺寸**确实会决定父节点的大小**（`height: 'auto'` 的容器高度就是被子节点撑出来的）。那为什么还说自顶向下？
+
+因为「自顶向下」描述的只是**约束（可用空间）的传递方向**。一次递归里信息实际走三次，方向是交替的：
+
+| 次序 | 方向 | 传什么 |
+| --- | --- | --- |
+| ① 约束下传 | 父 → 子 | `availableWidth/Height` + 测量模式（SizingMode） |
+| ② 尺寸上传 | 子 → 父 | 子节点的自然尺寸（`computedFlexBasis`，**只是假设值**） |
+| ③ 定位下传 | 父 → 子 | `left/top`（相对父节点的 frame）+ 对齐/拉伸后的最终尺寸 |
+
+**但这三次不是三次全局扫描，而是围绕每个节点、在局部交织发生的。** 宏观上整轮布局只有**两趟递归遍历**：
+
+| 趟次 | `performLayout` | 信息方向 | 做什么 |
+| --- | --- | --- | --- |
+| 测量趟 | `false` | **下行 + 上行** | 下行是函数调用（传约束），上行是它的**返回值**（传尺寸）；只定尺寸，不写 position |
+| 定位趟 | `true` | **纯下行** | 写 `left/top` 与最终尺寸；再次进入时命中缓存，不重复测量 |
+
+关键在于：**① 和 ② 属于同一趟、同一次递归调用**——"下行"是调用展开，"上行"是它的返回值，二者是同一次调用/返回的两端，不是两次独立的遍历。只有 ③ 才是第二次进入。子节点的调用区间**嵌套**在父节点的区间内，所以「下 - 上」这个模式在树的每一层都重复一次，而不是整棵树先统一走完下行、再统一走完上行。
+
+> 一句话记：**两趟遍历，三种方向；下行是调用，上行是返回，第二趟才是定位。**
+
+所以准确的心智模型是**递归下降 + 回溯**（树的深度优先后序处理），而不是单向扫描。
+
+**为什么必须两趟**：这里存在一个真实的依赖环——父节点要先知道自己的尺寸，才能给子节点定位（`left/top` 相对父节点、`alignItems: stretch` 与交叉轴对齐都依赖父尺寸）；而父节点在内容驱动时，又必须等所有子节点测完才知道自己多大。**破环的唯一办法就是把「测量」和「定位」拆成两趟**——这正是 4.2.2 那四步为什么是这个顺序。
+
+几个直接推论：
+
+- **测量结果是"假设值"**：`flex-basis` 只给出主轴上的猜测尺寸，要等弹性分配（`flexGrow`/`flexShrink`）之后才定最终值。所以同一个子节点可能被以**不同约束测量多次**——这正是 measure cache 存在的理由。
+- **父节点尺寸不确定时，该轴上的百分比退化为 `auto`**：`height: '50%'` 只有父高度确定才有意义，否则就是循环依赖，只能放弃百分比。
+- **滚动容器是"内容驱动"的极端**：滚动轴上给子节点的是 `Undefined`（max-content），即父节点根本不约束子节点，内容想多大就多大。
+- **最终尺寸要读布局结果**，不要读 measure 的返回值——那可能只是某一轮的假设值。
+
+#### 4.2.4 三种测量模式（SizingMode）
+
+递归下传时，每个轴都带一个**约束模式**，对应 CSS 的三种尺寸语义：
+
+| 内部名 | 公开名 | 含义 | 对应 CSS |
+| --- | --- | --- | --- |
+| `MaxContent` | `YGMeasureModeUndefined` | 无约束，返回内容自然尺寸 | `max-content` |
+| `FitContent` | `YGMeasureModeAtMost` | 不超过给定值 | `fit-content` |
+| `StretchFit` | `YGMeasureModeExactly` | 必须正好是这个尺寸 | `stretch-fit` |
+
+- 模式由上下文决定：父节点沿交叉轴拉伸子节点时是 `Exactly`；`alignItems: flex-start` 时是 `AtMost`；滚动容器在滚动轴上是 `Undefined`。
+- 模式**同时是缓存的 key**，模式变了缓存必然失效。
+
+#### 4.2.5 measure 函数、缓存与脏跳过
+
+**measure 函数：Yoga 怎么知道文本有多高**
+
+- Yoga 是通用布局引擎，**不知道**文本 / 图片的自然尺寸。做法是给叶子节点挂一个 **measure 函数**（`YGNodeSetMeasureFunc`），需要时才回调测量；用 `void*` context 把应用数据带进回调。
+- **挂 measure 函数的节点不能有布局子节点**（否则直接抛错）——对应 RN 里 `Text` 内部的文本节点。
+- 注意"**不要假设 measure 一定会被调用**"：节点已有确定尺寸时会走缓存。最终尺寸要读节点的布局结果，而不是自己缓存 measure 的返回值。
+
+**两类缓存 + 脏跳过**
+
+| 机制 | 位置 | 作用 |
+| --- | --- | --- |
+| `cachedLayout` / `cachedMeasurements[]` | Yoga 每个节点 | 按 `(width, widthMode, height, heightMode)` 复用测量结果，避免重复调用 measure 函数 |
+| 脏标记 + `generationCount` | Yoga `calculateLayoutInternal` | 未脏且 owner 方向未变的子树**整棵跳过**，直接复用上次结果 |
+| `dirtyLayout()` → `layoutIfNeeded()` | RN 影子树 | props 变化时把祖先链标脏；commit 时**只在树脏时才调 Yoga** |
+
+- 这是**两层独立的跳过**：RN 可能整轮都不算，Yoga 内部还会逐子树细粒度跳过。所以"改了样式但布局没重算"和"没改样式却全树重算"都有可能发生，排查时先确认脏标记的来源。
+- 脏标记是**向上传播**的：任何子节点标脏，从根到它的整条路径都要重算。
+
+#### 4.2.6 RN 侧的接入点
+
+- **`YogaLayoutableShadowNode`**：持有 `YGNode`，把 `ViewProps` 转成 Yoga style（`setYogaProps`），并把子影子节点挂成 Yoga 的子节点。
+- **文本测量**走 `TextShadowNode` 上的 measure 函数（内部是 `TextLayoutManager` + 文本布局缓存）——这也是**文本内容变化必须标脏重新布局**的原因。
+- 布局结果 → `LayoutMetrics`（frame: origin + size）→ mounting 阶段据此设置原生视图的位置与尺寸；`onLayout` 回调与 `measure()` 读的都同一份数据。
+- RN 里 `YGConfigSetUseWebDefaults` 是**关闭**的，所以 `flexDirection` 默认是 `column`（见 4.3）。
+
+#### 4.2.7 为什么快（与浏览器对比）
+
+| 维度 | 浏览器 CSS | Yoga |
+| --- | --- | --- |
+| 计算性质 | 与 DOM / 渲染树耦合 | **纯计算**：输入节点树 + 约束，输出 frame，无副作用 |
+| 内容尺寸来源 | 布局过程中反复回查 DOM → **reflow 抖动** | 由 measure 函数**预先提供**，且有缓存 |
+| 线程 | 主线程，会阻塞渲染 | 可离线 / 后台算（老架构 Shadow 线程；新架构在 C++ 层直接算） |
+| 尺寸传播 | 复杂的多轮 reflow | 测量 + 定位两趟递归走完，不回查外部状态 |
+| 像素对齐 | 设备像素比 + 独立合成 | 一次 `pointScaleFactor` 圆整 |
+
+> **一个常见误答**："Yoga 是单遍布局"并不准确。它是"**测量（定 flex basis）+ 定位**"两趟递归，只是在同一轮遍历里完成、不需要回查外部状态，因此没有浏览器那种多轮 reflow。面试时把"两趟但无外部往返"讲出来，比笼统说"单遍"更站得住。
+
+**版本**：对齐 Web 的改动在 **Yoga 3.0（RN 0.74）**落地——`gap`、`flex` 语义更接近 CSS，新增 `alignContent: 'space-evenly'`，并修正了 `row-reverse` 下 margin/padding/border 边缘翻转的老 bug（**这是 breaking change**，依赖旧行为的代码需要调整）。
 
 ### 4.3 Flexbox：RN 与 Web 的差异（高频考点）
 
@@ -238,6 +510,39 @@ React Common（C++）
 - `useMemo` / `useCallback` / `React.memo` 是列表与子树渲染优化的主力，但**不要滥用**（本身有比较成本）。
 - `ErrorBoundary`（类组件 + `componentDidCatch`）捕获子树渲染错误，做兜底 UI；**无法捕获事件回调与异步错误**（要全局 `ErrorUtils.setGlobalHandler`）。
 
+### 5.4 直接操作原生视图：`setNativeProps`（已废弃）
+
+- 挂在**原生组件 ref** 上的方法，直接改写底层原生视图属性，**绕过 render / diff / React 树**：
+
+```jsx
+const ref = useRef(null);
+<View ref={ref} style={{ opacity: 1 }} />
+ref.current.setNativeProps({ style: { opacity: 0.5 } });   // 不触发任何 React 流程
+```
+
+- 老架构下它是**性能逃生舱**：UI 更新要走 `setState → render → diff → Bridge 异步下发`，每帧调用太慢；`setNativeProps` 把中间全部砍掉，所以快到可以每帧执行。
+- 与 `setState` 的关键差异：
+
+| 维度 | `setState` | `setNativeProps` |
+| --- | --- | --- |
+| 更新路径 | render → diff → 挂载 → 原生 | 直达原生 |
+| React 树 | 同步更新，是唯一事实来源 | **不更新，树与视图脱节** |
+| 持久性 | 下一次 render 会重新下发，稳定 | **会被下一次 render 覆盖** |
+| 时机 | 异步批处理 | 同步、即时生效 |
+
+- 两个隐蔽语义：**prop 会"粘住"**（原生视图缓存上一次收到的 prop，只传部分 prop 时其余保留）；**`style` 是 merge 而不是替换**。合起来意味着原生视图里存在 **render 函数从未声明的隐式状态**——这正是排查困难、也是 Fabric 要修掉的问题。
+- **新架构不再支持**：官方迁移文档明确写着 "setNativeProps will not be supported in the post-Fabric world"。Fabric 的影子树不可变、由 React 完全持有，与"绕过 React 直接改视图"从根本上是冲突的。由于 0.82 起新架构是唯一架构，新代码不应再考虑它。
+- 替代方案：
+
+| 原来的用法 | 现在的做法 |
+| --- | --- |
+| 改样式 / 无障碍属性 | 提升为 **state**，由 render 声明 |
+| 每帧高频动画 | `Animated` + **`useNativeDriver: true`**（限 transform / opacity） |
+| 复杂手势、布局类属性动画 | **Reanimated**（worklet 跑 UI 线程） |
+| `<TextInput>` 直接改 text | 受控 `value`，或 `ref.current.clear()` |
+| 命令式操作原生视图 | `codegenNativeCommands` |
+| `findNodeHandle` 测量 | 直接在原生 ref 上调 `.measure()` |
+
 ## 六、列表与性能优化
 
 ### 6.1 列表选型
@@ -300,35 +605,141 @@ React Common（C++）
 | **Events** | 原生 → JS | `NativeEventEmitter` / `DeviceEventEmitter` 上报事件与数据 |
 | **JSI HostObject** | 双向，**同步** | 新架构能力：JS 直接持有 C++ 对象引用并同步调用 |
 
-### 8.2 新架构下的写法（Codegen spec）
+### 8.2 TurboModule 怎么写（spec + 三端实现）
+
+**① spec —— 唯一真相源**（文件名**必须以 `Native` 开头**，否则 Codegen 会静默忽略）
 
 ```ts
-// NativeDeviceInfo.ts —— 由 Codegen 生成胶水代码，原生侧实现
+// specs/NativeCalculator.ts
 import type { TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
 
 export interface Spec extends TurboModule {
-  getBatteryLevel(): Promise<number>;      // 异步：Promise
-  setBrightness(level: number): void;      // 同步：不返回 Promise 即同步调用
-  readonly constants: { model: string };   // 常量：可同步读取
+  add(a: number, b: number): number;                    // 同步：不返回 Promise
+  multiply(a: number, b: number): Promise<number>;      // 异步：Promise
+  divide(                                               // 回调：可多次返回（流式）
+    a: number, b: number,
+    onSuccess: (result: number) => void,
+    onError: (error: string) => void,
+  ): void;
+  getConstants(): { PI: number; E: number };            // 常量：可同步读取
 }
 
-export default TurboModuleRegistry.getEnforcing<Spec>('DeviceInfo');
+export default TurboModuleRegistry.getEnforcing<Spec>('NativeCalculator');
 ```
 
-```js
-// package.json 中声明，构建时触发 Codegen
-{
-  "codegenConfig": {
-    "name": "RNDeviceInfoSpec",
-    "type": "modules",
-    "jsSrcsDir": "src"
+方法形态与端上签名的对应关系：
+
+| spec 写法 | 语义 | Android (Kotlin) | iOS (ObjC++) |
+| --- | --- | --- | --- |
+| `(a: number) => number` | **同步** | `fun add(a: Double): Double` | `- (NSNumber *)add:(double)a` |
+| `(a: number) => Promise<number>` | 异步 | 末尾多一个 `promise: Promise` 参数 | `resolve:` + `reject:` 两个 block |
+| `(cb: (r) => void) => void` | 回调 | 末尾多一个 `cb: Callback` 参数 | `RCTResponseSenderBlock` |
+| `getConstants(): {...}` | 常量 | `getTypedExportedConstants()` | `- (NSDictionary *)getConstants` |
+
+**② package.json 声明**
+
+```json
+"codegenConfig": {
+  "name": "AppSpecs",
+  "type": "modules",
+  "jsSrcsDir": "specs",
+  "android": { "javaPackageName": "com.yourapp.specs" }
+}
+```
+
+Codegen 产物（**不要手改**）：Android 在 `android/build/generated/source/codegen/`（Java/Kotlin 抽象类 + JNI 胶水），iOS 在 `ios/build/generated/ios/`（`XxxSpec.h` 协议 + `XxxSpecJSI`）。
+
+**③ Android 实现**
+
+```kotlin
+// android/app/src/main/java/com/yourapp/CalculatorModule.kt
+class CalculatorModule(reactContext: ReactApplicationContext) :
+    NativeCalculatorSpec(reactContext) {                     // 继承 Codegen 生成的抽象类
+
+  override fun getName() = NAME
+  override fun add(a: Double, b: Double): Double = a + b     // 同步
+  override fun multiply(a: Double, b: Double, promise: Promise) = promise.resolve(a * b)
+  override fun divide(a: Double, b: Double, onSuccess: Callback, onError: Callback) {
+    onSuccess.invoke(a / b)
+  }
+  override fun getTypedExportedConstants(): Map<String, Any> = mapOf("PI" to Math.PI)
+
+  companion object { const val NAME = "NativeCalculator" }
+}
+```
+
+```kotlin
+// CalculatorPackage.kt —— 优先用 BaseReactPackage（懒加载，启动更快）
+class CalculatorPackage : BaseReactPackage() {
+  override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? =
+      if (name == CalculatorModule.NAME) CalculatorModule(reactContext) else null
+
+  override fun getReactModuleInfoProvider() = ReactModuleInfoProvider {
+    mapOf(CalculatorModule.NAME to ReactModuleInfo(
+      _name = CalculatorModule.NAME,
+      _className = CalculatorModule.NAME,
+      _canOverrideExistingModule = false,
+      _needsEagerInit = false,          // 懒加载：用到才初始化
+      isCxxModule = false,
+      isTurboModule = true,
+    ))
   }
 }
 ```
 
-- 老写法（新旧兼容通过 **interop 兼容层**）：iOS `RCT_EXPORT_MODULE` + `RCT_EXPORT_METHOD`，Android `ReactContextBaseJavaModule` + `@ReactMethod`，JS 侧 `NativeModules.XXX`。
-- **常量与同步方法**在旧桥下是异步兼容层最易出问题的地方，迁移时重点回归。
+注册：在 `MainApplication.kt` 的 `getPackages()` 中 `add(CalculatorPackage())`。
+
+**④ iOS 实现**（**模块入口必须是 ObjC/ObjC++**（`.mm`）；Swift 只能被它调用，不能直接作为模块入口）
+
+```objc
+// RCTCalculator.mm
+#import "RCTCalculator.h"
+@implementation RCTCalculator
+
+RCT_EXPORT_MODULE(NativeCalculator)          // 名字必须与 getEnforcing 一致
+
+- (NSNumber *)add:(double)a b:(double)b { return @(a + b); }   // 同步
+
+- (void)multiply:(double)a b:(double)b
+         resolve:(RCTPromiseResolveBlock)resolve
+          reject:(RCTPromiseRejectBlock)reject { resolve(@(a * b)); }
+
+- (NSDictionary *)getConstants { return @{@"PI": @(M_PI)}; }
+
+- (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
+    (const facebook::react::ObjCTurboModule::InitParams &)params {
+  return std::make_shared<facebook::react::NativeCalculatorSpecJSI>(params);
+}
+@end
+```
+
+**⑤ JS 调用**
+
+```ts
+import NativeCalculator from './specs/NativeCalculator';
+
+const sum = NativeCalculator.add(5, 3);                  // 同步，直接拿到返回值
+const product = await NativeCalculator.multiply(5, 3);   // 异步
+```
+
+**⚠️ 三处名字必须完全一致** —— 这是"模块找不到"最常见的原因：
+
+| 位置 | 值 |
+| --- | --- |
+| spec：`getEnforcing('NativeCalculator')` | `NativeCalculator` |
+| Android：`NAME` | `NativeCalculator` |
+| iOS：`RCT_EXPORT_MODULE(...)` | `NativeCalculator` |
+
+不一致时 `getEnforcing` 会**直接抛错**（用 `get` 则拿到 `null`，报错更晚、更难查）。
+
+**其他常见坑**
+
+- **改了 spec 名字后 iOS 要清缓存**：`rm -rf ios/build`，否则旧产物残留导致签名对不上。
+- **同步方法会阻塞 JS 线程**：不要在同步方法里做重活。
+- **`Object` / `Array` 跨边界是递归转换**，大数组可能比自己算还慢（见 [8.4](#84-落地场景把-cpu-密集计算交给原生)）。
+- **无平台依赖的算法优先写成纯 C++ 模块**，一份代码双端通用（见 [8.4](#84-落地场景把-cpu-密集计算交给原生)）。
+- 老写法（新旧兼容通过 **interop 兼容层**）：iOS `RCT_EXPORT_MODULE` + `RCT_EXPORT_METHOD`，Android `ReactContextBaseJavaModule` + `@ReactMethod`，JS 侧 `NativeModules.XXX`。**常量与同步方法**在旧桥下最易出问题，迁移时重点回归。
 
 ### 8.3 原生视图组件（Fabric Component）
 
@@ -339,6 +750,105 @@ export default codegenNativeComponent<Props>('MyNativeView');
 
 - 需要原生侧提供 **Component Descriptor**（iOS）/ **ViewManager + Delegate**（Android，新架构用 `Fabric ViewManager`）。
 - 旧 `RCTViewManager` 在 Fabric 下**默认不生效**，需要 interop 层（只是迁移过渡，不要长期依赖）。
+
+### 8.4 落地场景：把 CPU 密集计算交给原生
+
+#### 先分清三条出路
+
+| 出路 | 本质 | 适用 |
+| --- | --- | --- |
+| **TurboModule（纯 C++）** | 真的换执行体 | 无平台依赖的算法：加解密、压缩、图像/音频处理、解析 |
+| **TurboModule（平台实现）** | 真的换执行体 | 需要平台 API，或要链接原生库（OpenCV / ONNX / FFmpeg / libsodium） |
+| Reanimated worklet | **仍是 JS，只是换线程** | 每帧都要跑、必须不阻塞 JS 线程，但计算量本身不大 |
+
+> ⚠️ 常见误解：**worklet 不会让单次计算变快**。Hermes 单线程才是 CPU 密集任务的硬天花板，C++ 的收益主要来自**能用多核 + 能链接成熟库**，而不是"编译得更优"。
+
+#### 动手：纯 C++ TurboModule 五步
+
+**① 写 spec**（**文件名必须以 `Native` 开头**，否则 Codegen 直接忽略）
+
+```ts
+// specs/NativeFastCodec.ts
+import type { TurboModule } from 'react-native';
+import { TurboModuleRegistry } from 'react-native';
+
+export interface Spec extends TurboModule {
+  readonly encodeAll: (chunks: string[]) => string;   // 不返回 Promise = 同步调用
+}
+export default TurboModuleRegistry.getEnforcing<Spec>('FastCodec');
+```
+
+**② package.json 声明**
+
+```json
+"codegenConfig": {
+  "name": "AppSpecs",
+  "type": "modules",
+  "jsSrcsDir": "specs",
+  "android": { "javaPackageName": "com.sampleapp.specs" }
+}
+```
+
+**③ 实现**（放 `shared/` 目录，与 `android`/`ios` 同级，**双端共用一份代码**）
+
+```cpp
+// shared/NativeFastCodec.h
+#pragma once
+#include <ReactCommon/TurboModule.h>
+#include "AppSpecs/NativeFastCodec.h"        // Codegen 生成，路径由 codegenConfig.name 决定
+
+namespace facebook::react {
+class NativeFastCodec : public NativeFastCodecCxxSpec {
+ public:
+  explicit NativeFastCodec(std::shared_ptr<CallInvoker> jsInvoker);
+  std::string encodeAll(jsi::Runtime& rt, std::vector<std::string> chunks);
+};
+} // namespace facebook::react
+```
+
+```cpp
+// shared/NativeFastCodec.cpp
+#include "NativeFastCodec.h"
+
+namespace facebook::react {
+NativeFastCodec::NativeFastCodec(std::shared_ptr<CallInvoker> jsInvoker)
+    : NativeFastCodecCxxSpec(std::move(jsInvoker)) {}
+
+std::string NativeFastCodec::encodeAll(jsi::Runtime& rt, std::vector<std::string> chunks) {
+  // 这里就是纯 C++：可以开线程池、写 SIMD、链接第三方库
+  return "encoded";
+}
+} // namespace facebook::react
+```
+
+**④ 注册**：Android 在 `MainApplication.getPackages()` 中加 Codegen 生成的 `<name>Package`；iOS 在 AppDelegate 里通过 `TurboModuleProvider` 注册 factory。
+
+**⑤ JS 直接用**：`import FastCodec from './specs/NativeFastCodec'; FastCodec.encodeAll(chunks)`。
+
+- Codegen 会把**同步方法**生成成直接返回 `jsi::Value` 的实现，跨边界没有 Promise 排队（这也是上一节"TurboModule 是 `jsi::HostObject`"的具体体现）。
+
+#### 真正容易翻车的地方：跨边界的数据开销
+
+新架构下**一次 JSI 调用本身很便宜**（亚毫秒级），但**参数的转换不一定便宜**：
+
+| 类型 | 跨边界行为 |
+| --- | --- |
+| `number` / `boolean` | 值拷贝，最便宜 |
+| `string` | 拷贝（大字符串有成本） |
+| `Object` / `Array` | **递归转换**：每个字段都要转成 `jsi::Value`，10 万条记录**光转换就可能比计算本身还慢** |
+
+由此推出的实践原则：
+
+- **别传大数组 / 大对象**。传**句柄或 ID**，让 C++ 侧自己持有数据（先 `loadDataset(id)`，之后只传 `id`）。
+- **减少调用次数比减小单次体积更重要**：1000 次小调用合并成 1 次批量调用。
+- **二进制数据用 `ArrayBuffer`**：官方 Codegen 类型表（string/boolean/Object/Array/Function/Promise/Type Union/Callback/number）**未列入它**，属较新加入的能力，且已在双端做零拷贝优化；若版本较旧或需要更细的内存控制，可退回**手写 JSI 绑定**（实现 `RCTTurboModuleWithJSIBindings`），直接操作 `jsi::ArrayBuffer` 的底层内存。
+- **不要用 JSON 字符串传结构**：序列化 + 反序列化是双倍开销，且丢掉类型安全。
+
+#### 什么时候**不该**交给原生
+
+- 计算量本来就小（几毫秒内）：跨边界与维护成本不划算。
+- 每帧调用的高频小计算：TurboModule 的调度开销可能反而更慢，优先 worklet。
+- **先量再优化**：用 React Native DevTools 的 Performance 面板确认瓶颈确实在 JS 执行时间，再决定搬 —— Hermes 没有 JIT 不等于它慢。
 
 ## 九、动画
 
@@ -370,7 +880,7 @@ export default codegenNativeComponent<Props>('MyNativeView');
 - **生产环境**：bundle 打进 App 资源，运行时解压到应用私有目录，由 Hermes 加载。
 - **Hermes**：Meta 为 RN 定制的 JS 引擎，**构建期 AOT 编译为字节码**，省去运行时 parse/compile：
   - 启动更快、内存占用更低、包更小。
-  - **不带 JIT**（CPU 密集的纯 JS 计算不如 JSC/V8），这也是"复杂计算交给原生"的原因之一。
+  - **不带 JIT**（CPU 密集的纯 JS 计算不如 JSC/V8）—— 但比"没 JIT"更根本的限制是**它单线程**，交给原生真正的收益在**多核与原生库**，见 [8.4](#84-落地场景把-cpu-密集计算交给原生)。
   - 0.70 起 Android 默认，iOS 逐步默认；**0.84 起 Hermes V1 成为默认引擎**（字节码与集成面兼容，无需改代码）。
 
 ### 10.3 调试工具

@@ -1,0 +1,184 @@
+<svg viewBox="0 0 680 720" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>UML 2.x 十四种图分类总览</title>
+<desc>按建模用途将 UML 14 种图分为四类：需求建模（用例图）、静态建模（类图、对象图、包图）、动态建模（顺序图、通信图、定时图、状态图、活动图、交互概览图）、物理建模（构件图、部署图、制品图、组合结构图），每种图配有最小识别符号。</desc>
+<defs>
+<marker id="arrowB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#185FA5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="arrowG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+
+<text x="40" y="36" font-family="-apple-system,PingFang SC,sans-serif" font-size="15" font-weight="500" fill="#2C2C2A">UML 2.x 十四种图</text>
+<text x="40" y="56" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="#5F5E5A">按建模用途分四类：需求 / 静态 / 动态 / 物理</text>
+
+<rect x="40" y="70" width="300" height="214" rx="20" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="56" y="94" font-family="-apple-system,PingFang SC,sans-serif" font-size="14" font-weight="500" fill="#0C447C">1 需求建模</text>
+<text x="56" y="112" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="#185FA5">用例图 · 系统功能与外部交互</text>
+
+<rect x="56" y="124" width="268" height="144" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="150" y="126" width="112" height="112" rx="4" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5" stroke-dasharray="4 3"/>
+<text x="206" y="140" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">系统</text>
+<circle cx="88" cy="166" r="7" fill="none" stroke="#5F5E5A" stroke-width="1.5"/>
+<path d="M88 173 L88 200 M76 182 L100 182 M88 200 L78 218 M88 200 L98 218" fill="none" stroke="#5F5E5A" stroke-width="1.5" stroke-linecap="round"/>
+<text x="88" y="232" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">参与者</text>
+<ellipse cx="206" cy="164" rx="30" ry="15" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="206" y="168" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">登录</text>
+<ellipse cx="206" cy="202" rx="30" ry="15" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="206" y="206" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">选课</text>
+<path d="M96 166 L176 164" fill="none" stroke="#5F5E5A" stroke-width="1"/>
+<path d="M206 179 L206 187" fill="none" stroke="#185FA5" stroke-width="1" stroke-dasharray="3 2" marker-end="url(#arrowB)"/>
+<text x="238" y="186" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#185FA5">«include»</text>
+<text x="190" y="258" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">用例图</text>
+
+<rect x="340" y="70" width="300" height="214" rx="20" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="356" y="94" font-family="-apple-system,PingFang SC,sans-serif" font-size="14" font-weight="500" fill="#0C447C">2 静态建模</text>
+<text x="356" y="112" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="#185FA5">类图 / 对象图 / 包图</text>
+
+<rect x="362" y="124" width="80" height="144" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="378" y="138" width="60" height="62" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<path d="M378 156 L438 156 M378 174 L438 174" fill="none" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="408" y="150" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">User</text>
+<text x="408" y="168" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">-name</text>
+<text x="408" y="186" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">+login()</text>
+<text x="402" y="258" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">类图</text>
+
+<rect x="450" y="124" width="80" height="144" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="462" y="138" width="56" height="54" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="490" y="152" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">alice</text>
+<text x="490" y="164" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">:User</text>
+<path d="M462 170 L518 170" fill="none" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="490" y="184" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">name</text>
+<text x="490" y="258" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">对象图</text>
+
+<rect x="538" y="124" width="80" height="144" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="548" y="146" width="54" height="34" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<rect x="548" y="138" width="24" height="8" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="575" y="167" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">订单模块</text>
+<path d="M575 180 L575 196" fill="none" stroke="#185FA5" stroke-width="1" stroke-dasharray="3 2" marker-end="url(#arrowB)"/>
+<rect x="548" y="198" width="54" height="28" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<rect x="548" y="190" width="24" height="8" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="575" y="216" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">支付</text>
+<text x="578" y="258" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">包图</text>
+
+<rect x="40" y="300" width="300" height="380" rx="20" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="56" y="324" font-family="-apple-system,PingFang SC,sans-serif" font-size="14" font-weight="500" fill="#0C447C">3 动态建模</text>
+<text x="56" y="342" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="#185FA5">顺序 / 通信 / 定时 / 状态 / 活动 / 交互概览</text>
+
+<rect x="58" y="354" width="80" height="140" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="70" y="364" width="24" height="14" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="82" y="375" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">用户</text>
+<rect x="102" y="364" width="24" height="14" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="114" y="375" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">系统</text>
+<path d="M82 382 L82 470 M114 382 L114 470" fill="none" stroke="#5F5E5A" stroke-width="0.5" stroke-dasharray="3 3"/>
+<rect x="80" y="388" width="4" height="44" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="0.5"/>
+<rect x="112" y="388" width="4" height="44" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="0.5"/>
+<path d="M82 396 L114 396" fill="none" stroke="#185FA5" stroke-width="1" marker-end="url(#arrowB)"/>
+<text x="98" y="389" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#185FA5" text-anchor="middle">查询</text>
+<path d="M114 420 L82 420" fill="none" stroke="#185FA5" stroke-width="1" marker-end="url(#arrowB)"/>
+<text x="98" y="413" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#185FA5" text-anchor="middle">结果</text>
+<text x="98" y="484" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">顺序图</text>
+
+<rect x="146" y="354" width="80" height="140" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="156" y="374" width="26" height="18" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="169" y="387" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">A</text>
+<rect x="194" y="374" width="26" height="18" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="207" y="387" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">B</text>
+<path d="M182 383 L194 383" fill="none" stroke="#185FA5" stroke-width="1" marker-end="url(#arrowB)"/>
+<text x="188" y="368" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#185FA5" text-anchor="middle">1: 查询</text>
+<text x="186" y="484" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">通信图</text>
+
+<rect x="234" y="354" width="80" height="140" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="246" y="378" width="22" height="7" fill="#5F5E5A"/>
+<rect x="268" y="378" width="20" height="7" fill="#D3D1C7" stroke="#5F5E5A" stroke-width="0.5"/>
+<rect x="288" y="378" width="16" height="7" fill="#5F5E5A"/>
+<path d="M268 374 L268 392 M288 374 L288 392" fill="none" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="257" y="371" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">开</text>
+<text x="278" y="371" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">关</text>
+<text x="296" y="371" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">开</text>
+<path d="M246 402 L302 402" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowG)"/>
+<text x="304" y="406" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441">t</text>
+<text x="274" y="484" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">定时图</text>
+
+<rect x="58" y="516" width="80" height="140" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<circle cx="72" cy="548" r="5" fill="#185FA5"/>
+<rect x="92" y="536" width="44" height="24" rx="12" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="114" y="552" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">待支付</text>
+<path d="M77 548 L92 548" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowG)"/>
+<text x="114" y="530" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">支付</text>
+<path d="M136 548 L152 548" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowG)"/>
+<circle cx="158" cy="548" r="5" fill="#FFFFFF" stroke="#185FA5" stroke-width="1.5"/>
+<circle cx="158" cy="548" r="2" fill="#185FA5"/>
+<text x="98" y="646" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">状态图</text>
+
+<rect x="146" y="516" width="80" height="140" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<circle cx="160" cy="538" r="5" fill="#185FA5"/>
+<rect x="172" y="526" width="36" height="24" rx="12" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="190" y="542" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">提交</text>
+<path d="M165 538 L172 538" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowG)"/>
+<path d="M190 550 L190 564" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowG)"/>
+<path d="M177 564 L203 564 L203 588 L177 588 Z" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="190" y="580" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">通过</text>
+<path d="M190 588 L190 600" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowG)"/>
+<text x="198" y="596" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441">是</text>
+<circle cx="190" cy="606" r="5" fill="#185FA5"/>
+<path d="M203 576 L214 576 L214 538 L208 538" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowG)"/>
+<text x="210" y="558" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">否</text>
+<text x="186" y="646" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">活动图</text>
+
+<rect x="234" y="516" width="80" height="140" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="246" y="528" width="44" height="28" rx="4" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<path d="M282 528 L290 528 L290 536" fill="none" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="262" y="546" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">交互</text>
+<path d="M268 556 L268 572" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowG)"/>
+<rect x="246" y="576" width="44" height="28" rx="4" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<path d="M282 576 L290 576 L290 584" fill="none" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="262" y="594" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">交互</text>
+<path d="M290 590 L302 590" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowG)"/>
+<circle cx="306" cy="590" r="4" fill="#185FA5"/>
+<text x="274" y="646" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">交互概览图</text>
+
+<rect x="340" y="300" width="300" height="380" rx="20" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="356" y="324" font-family="-apple-system,PingFang SC,sans-serif" font-size="14" font-weight="500" fill="#0C447C">4 物理建模</text>
+<text x="356" y="342" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="#185FA5">构件 / 部署 / 制品 / 组合结构</text>
+
+<rect x="358" y="354" width="124" height="140" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="386" y="376" width="58" height="36" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<rect x="382" y="382" width="4" height="10" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<rect x="382" y="396" width="4" height="10" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="415" y="398" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">订单服务</text>
+<path d="M444 376 L444 366" fill="none" stroke="#5F5E5A" stroke-width="1"/>
+<circle cx="444" cy="362" r="3.5" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="1"/>
+<path d="M386 412 L380 412 M380 412 A7 7 0 0 0 380 426 M380 426 L386 426" fill="none" stroke="#5F5E5A" stroke-width="1"/>
+<text x="415" y="442" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#5F5E5A" text-anchor="middle">«component»</text>
+<text x="420" y="484" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">构件图</text>
+
+<rect x="490" y="354" width="124" height="140" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="506" y="368" width="60" height="46" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="536" y="382" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#5F5E5A" text-anchor="middle">«device»</text>
+<text x="536" y="396" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">Web 服务器</text>
+<rect x="514" y="400" width="44" height="12" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="536" y="410" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">Tomcat</text>
+<rect x="562" y="424" width="44" height="36" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="584" y="438" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#5F5E5A" text-anchor="middle">«device»</text>
+<text x="584" y="452" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">数据库</text>
+<path d="M566 414 L584 424" fill="none" stroke="#185FA5" stroke-width="1" stroke-dasharray="3 2" marker-end="url(#arrowB)"/>
+<text x="580" y="418" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#185FA5" text-anchor="middle">SQL</text>
+<text x="552" y="484" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">部署图</text>
+
+<rect x="358" y="516" width="124" height="140" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<path d="M386 534 L414 534 L422 542 L422 570 L386 570 Z" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<path d="M414 534 L414 542 L422 542" fill="none" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="404" y="558" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">订单.war</text>
+<text x="404" y="590" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#5F5E5A" text-anchor="middle">«artifact»</text>
+<text x="420" y="646" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">制品图</text>
+
+<rect x="490" y="516" width="124" height="140" rx="8" fill="#FFFFFF" stroke="#85B7EB" stroke-width="0.5"/>
+<rect x="508" y="532" width="68" height="64" rx="4" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="542" y="548" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">订单</text>
+<rect x="504" y="558" width="6" height="6" fill="#5F5E5A"/>
+<rect x="574" y="558" width="6" height="6" fill="#5F5E5A"/>
+<rect x="520" y="554" width="26" height="18" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="533" y="567" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">明细</text>
+<rect x="550" y="554" width="22" height="18" fill="#FFFFFF" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="561" y="567" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="#444441" text-anchor="middle">仓储</text>
+<path d="M510 561 L520 561 M546 563 L550 563 M572 561 L574 561" fill="none" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="542" y="646" font-family="-apple-system,PingFang SC,sans-serif" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">组合结构图</text>
+</svg>

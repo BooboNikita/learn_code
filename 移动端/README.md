@@ -10,6 +10,7 @@
 - 协程：`suspend`、`Dispatchers`、结构化并发、Flow。
 - Android 使用：Jetpack Compose、ViewModel/Lifecycle、Retrofit + 协程、Android KTX。
 - Flutter：三棵树（Widget/Element/RenderObject）、渲染管线（Build/Layout/Paint/Compositing/Rasterize）、性能优化。
+- Flutter 工程实战：Dart 异步与 Isolate、状态管理选型、Pigeon 平台通道与线程模型、BLE/音频链路、流式文本渲染、双端发布与桌面适配。
 - React Native：原生渲染原理、Bridge 与 JSI、新架构四件套（Fabric/TurboModules/Codegen）、Yoga 与 Flexbox 差异、列表与启动优化、原生互操作与热更新。
 - 面试：语言特性辨析、协程原理、Android 生命周期与异步方案对比、Flutter 渲染原理、RN 架构演进与性能定位。
 
@@ -21,6 +22,7 @@
 - [Kotlin 面试题](Kotlin面试题.md)：基础语法 / 空安全 / 协程 / Android 使用 / JVM 互操作 / 进阶 高频题与要点。
 - [Kotlin 语法糖对照](Kotlin语法糖.md)：Android 常用语法糖（空安全、data class、扩展函数、作用域函数、协程 KTX 等）与手写 Java 等价物逐条对照。
 - [Flutter 渲染树与渲染流程](Flutter/README.md)：三棵树职责与 diff 复用、一帧渲染管线、布局/绘制边界与性能优化、高频面试题。
+- [Flutter 岗位复习（IoT / AI 应用）](Flutter/Flutter岗位复习-IoT与AI应用.md)：按岗位 JD 反推考点的复习路线——Dart 异步与 Isolate、状态管理与 feature 分层、Pigeon 通道与线程模型、BLE 设备中心与断连重连、音频采集/传输/播放、流式文本与长列表渲染、性能定位、双端发布与桌面适配、高频面试题与项目叙事模板。
 - [React Native 基础](ReactNative基础.md)：原生渲染定位与跨端对比、Bridge 到新架构（JSI/TurboModules/Fabric/Codegen）、深入 JSI 与 HostObject 机制、Fabric 渲染器三棵树与不可变影子树、线程模型与渲染流程、Yoga 与 Flexbox 差异、组件与列表优化、setNativeProps 及其替代、原生互操作、动画、工程化与版本演进。
 - [React Native 面试题](ReactNative面试题.md)：定位对比 / 架构与通信（含 JSI 实现机制、Fabric 渲染细节）/ 渲染与布局 / 组件与状态 / 原生互操作 / 动画 / 工程化与热更新 / 开放题 高频题与要点。
 
